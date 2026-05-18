@@ -566,6 +566,21 @@ async function removeFollowItem(idx){
   customers=customers.map(x=>x.id===selectedId?{...x,follow_up_items:items}:x);renderDetail();
 }
 function previewImg(src){const d=document.createElement('div');d.className='img-overlay';d.innerHTML=`<img src="${esc(src)}">`;d.onclick=()=>d.remove();document.body.appendChild(d);}
+function previewFileModal(url,name,type){
+  const d=document.createElement('div');
+  d.className='img-overlay';
+  d.style.flexDirection='column';d.style.gap='12px';
+  let content='';
+  if(type==='img') content=`<img src="${esc(url)}" style="max-width:90vw;max-height:80vh;border-radius:12px">`;
+  else if(type==='video') content=`<video src="${esc(url)}" controls style="max-width:90vw;max-height:80vh;border-radius:12px"></video>`;
+  else content=`<iframe src="${esc(url)}" style="width:90vw;height:80vh;border-radius:12px;border:none;background:#fff"></iframe>`;
+  d.innerHTML=`${content}<div style="display:flex;gap:10px">
+    <a href="${esc(url)}" target="_blank" style="background:var(--amber);color:#fff;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none">Open in new tab ↗</a>
+    <button onclick="this.closest('.img-overlay').remove()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">Close</button>
+  </div>`;
+  d.onclick=e=>{if(e.target===d)d.remove();};
+  document.body.appendChild(d);
+}
 
 // WISHLIST
 let _wishImgData=null;
@@ -656,7 +671,14 @@ function renderOrderCard(o,inDetail=false){
     const note=stepNotes[s.k]||'';
     const date=stepDates[s.k]||'';
     const files=stepFiles[s.k]||[];
-    const filesHtml=files.map(f=>`<a class="step-file-item" href="${esc(f.url)}" target="_blank" title="${esc(f.name)}">${fileIcon(f.name)} ${esc(f.name.length>20?f.name.slice(0,18)+'…':f.name)}</a>`).join('');
+    const isLastDone=done&&(i===o.current_step-1);
+    const filesHtml=files.map(f=>{
+      const isImg=['jpg','jpeg','png','gif','webp'].includes((f.name||'').split('.').pop().toLowerCase());
+      const isVid=['mp4','mov','avi','webm'].includes((f.name||'').split('.').pop().toLowerCase());
+      if(isImg) return`<img src="${esc(f.url)}" onclick="previewFileModal('${esc(f.url)}','${esc(f.name)}','img')" style="width:56px;height:56px;object-fit:cover;border-radius:7px;border:1px solid var(--border);cursor:pointer">`;
+      if(isVid) return`<button class="step-file-item" onclick="previewFileModal('${esc(f.url)}','${esc(f.name)}','video')">${fileIcon(f.name)} ${esc(f.name.length>18?f.name.slice(0,16)+'…':f.name)}</button>`;
+      return`<a class="step-file-item" href="${esc(f.url)}" target="_blank" title="${esc(f.name)}">${fileIcon(f.name)} ${esc(f.name.length>18?f.name.slice(0,16)+'…':f.name)}</a>`;
+    }).join('');
     const uploadHtml=(active||done)&&s.files&&s.files.length?`<label class="file-upload-btn"><input type="file" style="display:none" accept="${getAccept(s.files)}" onchange="uploadStepFile('${o.id}','${s.k}',this)">📎 ${s.fileLabel||'Attach file'}</label>`:'';
     return`<div class="step ${cls}">
       <div class="step-row">
@@ -665,12 +687,12 @@ function renderOrderCard(o,inDetail=false){
         ${date?`<span class="step-date">${date}</span>`:''}
         <div class="step-actions">
           ${active?`<button class="btn btn-primary btn-sm" onclick="completeStep('${o.id}','${s.k}',${i},${steps.length},'${inDetail}')">Done ✓</button>`:''}
-          ${done&&i>0?`<button class="btn btn-secondary btn-sm" onclick="undoStep('${o.id}',${i},'${inDetail}')" title="Undo this step">↩</button>`:''}
+          ${isLastDone?`<button class="btn btn-secondary btn-sm" onclick="undoStep('${o.id}',${i},'${inDetail}')" title="Undo last step">↩ Undo</button>`:''}
         </div>
       </div>
       ${(active||done)?`<input class="step-note" placeholder="Note..." value="${esc(note)}" onchange="saveStepNote('${o.id}','${s.k}',this.value)">`:''}
-      ${filesHtml?`<div class="step-files">${filesHtml}</div>`:''}
-      ${uploadHtml?`<div class="step-files">${uploadHtml}</div>`:''}
+      ${filesHtml?`<div class="step-files" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px">${filesHtml}</div>`:''}
+      ${uploadHtml?`<div class="step-files" style="margin-top:5px">${uploadHtml}</div>`:''}
     </div>`;
   }).join('');
   const agentHtml=(o.shipping_agent_name||o.customs_agent_name)?`
@@ -771,15 +793,11 @@ function channelFieldHtml(ch){
 }
 function customerFormHtml(c={}){
   const selCh=c.preferred_channel||'whatsapp';
-  const selCoId=c.company_id||SAMIN_MARBLE_ID;
   const chHtml=Object.entries(CH_CONFIG).map(([k,v])=>`<button type="button" class="radio-chip${selCh===k?' active':''}" onclick="selectChannel('${k}')" data-ch="${k}">${v.icon} ${v.label}</button>`).join('');
   const chipsK=CATS.map(cat=>`<button type="button" class="chip${(c.interests?.categories||[]).includes(cat)?' cd':''}" onclick="this.classList.toggle('cd')" data-cat="${cat}">${cat}</button>`).join('');
   const ptChips=PROD_TYPES.map(t=>`<button type="button" class="chip${(c.product_types||[]).includes(t)?' ca':''}" onclick="toggleProdType(this)" data-pt="${t}">${t}</button>`).join('');
   const pr=c.interests?.price_range||{};
   return`
-    <div class="fg full"><label class="fl">Company</label><select class="fsel" id="fc-co">
-      ${companies.map(co=>`<option value="${co.id}"${selCoId===co.id?' selected':''}>${co.name} ${co.country==='TR'?'🇹🇷':'🇮🇷'}</option>`).join('')}
-    </select></div>
     <div class="fg"><label class="fl">Company / Customer Name</label><input class="fi" id="fc-name" value="${esc(c.name||'')}"></div>
     <div class="fg"><label class="fl">Preferred Communication Channel</label>
       <div class="radio-group" id="ch-group">${chHtml}</div>
@@ -822,8 +840,10 @@ async function saveCustomerForm(id){
   const cats=[...document.querySelectorAll('#chips-cat .chip.cd')].map(el=>el.dataset.cat);
   const pts=[...document.querySelectorAll('#chips-pt .chip.ca')].map(el=>el.dataset.pt);
   const ch=document.getElementById('fc-ch').value;
-  const coId=document.getElementById('fc-co')?.value||currentProfile.company_id;
   const contactVal=document.getElementById('fc-contact-val')?.value.trim()||'';
+  // Keep existing company_id or use Samin Marble as default
+  const existingC=id?customers.find(x=>x.id===id):null;
+  const coId=existingC?.company_id||SAMIN_MARBLE_ID;
   const obj={name,company_id:coId,preferred_channel:ch,contact_value:contactVal,contact:contactVal,
     send_price:document.getElementById('fc-price').checked,send_dimensions:document.getElementById('fc-dims').checked,send_slab_photo:document.getElementById('fc-slab').checked,
     product_types:pts,block_min_dim:document.getElementById('fc-block-dim')?.value.trim()||'',slab_min_dim:document.getElementById('fc-slab-dim')?.value.trim()||'',cut_dimensions:document.getElementById('fc-cut-dim')?.value.trim()||'',
@@ -838,7 +858,9 @@ async function saveCustomerForm(id){
 let _transport='S';
 function openAddOrder(customerId,customerName,companyId){
   _transport='S';
+  const coOptions=companies.map(co=>`<option value="${co.id}"${co.id===companyId?' selected':''}>${co.name} ${co.country==='TR'?'🇹🇷':'🇮🇷'}</option>`).join('');
   openModal(`New Order — ${customerName}`,`
+    <div class="fg"><label class="fl">Exporting Company <span class="required-mark">*</span></label><select class="fsel" id="fo-co">${coOptions}</select></div>
     <div class="fg"><label class="fl">Stone / Product <span class="required-mark">*</span></label><input class="fi" id="fo-stone" placeholder="e.g. White Calacatta Marble"></div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
       <div class="fg"><label class="fl">Quantity</label><input class="fi" id="fo-qty" placeholder="500"></div>
@@ -883,7 +905,7 @@ async function saveOrder(customerId,companyId){
   if(!stone){showToast('Enter stone name');return;}
   if(!dest){showToast('Enter destination');return;}
   if(_transport==='S'&&!pol){showToast('Enter Port of Load');return;}
-  const obj={customer_id:customerId,company_id:companyId,stone,
+  const obj={customer_id:customerId,company_id:document.getElementById('fo-co').value,stone,
     quantity:document.getElementById('fo-qty').value,unit:document.getElementById('fo-unit').value,
     transport_type:_transport,destination:dest,delivery_term:term,port_of_load:pol||null,
     shipping_agent_name:document.getElementById('fo-sa-name').value.trim(),shipping_agent_phone:document.getElementById('fo-sa-phone').value.trim(),shipping_agent_email:document.getElementById('fo-sa-email').value.trim(),
