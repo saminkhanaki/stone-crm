@@ -703,10 +703,13 @@ function renderOrderCard(o,inDetail=false){
     </div>`:'';
   return`<div class="ord-card">
     <div class="ord-head">
-      <div><div class="ord-title">${esc(o.stone)}</div>
+      <div style="flex:1;min-width:0"><div class="ord-title">${esc(o.stone)}</div>
         <div class="ord-sub">${esc(o.quantity||'')} ${esc(o.unit||'')} · ${new Date(o.created_at).toLocaleDateString('en-GB')}</div>
       </div>
-      ${badge(o.transport_type==='T'?'🚛 Land':'🚢 Sea',o.transport_type==='T'?'b-amber':'b-blue')}
+      <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
+        ${badge(o.transport_type==='T'?'🚛 Land':'🚢 Sea',o.transport_type==='T'?'b-amber':'b-blue')}
+        <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)" onclick="deleteOrder('${o.id}','${esc(o.stone)}','${inDetail}')">🗑</button>
+      </div>
     </div>
     <div class="ord-meta">
       <div class="ord-meta-item">📍 ${esc(o.destination||'—')}</div>
@@ -726,6 +729,13 @@ function getAccept(types){
 }
 
 // STEP ACTIONS
+async function deleteOrder(orderId,stoneName,inDetail){
+  if(!confirm(`Delete order "${stoneName}"?\n\nThis cannot be undone.`)) return;
+  const {error}=await sb.from('orders').delete().eq('id',orderId);
+  if(error){showToast('Error: '+error.message);return;}
+  showToast('Order deleted');
+  if(inDetail==='true') renderDetail(); else renderAllOrders();
+}
 async function completeStep(orderId,stepKey,stepIdx,totalSteps,inDetail){
   const newStep=Math.min(stepIdx+1,totalSteps-1);
   const {data:ord}=await sb.from('orders').select('step_dates').eq('id',orderId).single();
@@ -804,7 +814,7 @@ function customerFormHtml(c={}){
       <div id="ch-field-wrap">${channelFieldHtml(selCh)}</div>
     </div>
     <input type="hidden" id="fc-ch" value="${selCh}">
-    <script>setTimeout(()=>{const v=document.getElementById('fc-contact-val');if(v)v.value='${esc(c.contact_value||'')}';}，0);<\/script>
+    <script>setTimeout(()=>{const v=document.getElementById('fc-contact-val');if(v)v.value='${esc(c.contact_value||'')}';},0);<\/script>
     <div class="fg"><label class="fl">Send when introducing a new product</label>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         <label class="check-row"><input type="checkbox" id="fc-price"${c.send_price?' checked':''}> Price</label>
