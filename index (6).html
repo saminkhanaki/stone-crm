@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stone Trading CRM</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f4f0;--surface:#fff;--surface2:#faf8f5;--border:#e8e2da;--border2:#d6cfc6;
+  --text:#1c1a17;--text2:#6b6560;--text3:#9c9590;
+  --amber:#c9820a;--amber-light:#fef3dc;--amber-border:#f5d48a;
+  --green:#2d7a4f;--green-light:#edf7f2;--green-border:#9fd4b8;
+  --blue:#1e6fa8;--blue-light:#e8f4fd;--blue-border:#8ec8f0;
+  --red:#c0392b;--red-light:#fdecea;--red-border:#f5b7b1;
+  --stone-dark:#3d3832;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 4px 12px rgba(0,0,0,.05);
+  --shadow-lg:0 4px 16px rgba(0,0,0,.12),0 8px 32px rgba(0,0,0,.08);
+  --r:14px;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+#auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.auth-card{background:var(--surface);border:1.5px solid var(--border);border-radius:24px;padding:40px;width:100%;max-width:400px;box-shadow:var(--shadow-lg)}
+.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:32px}
+.auth-icon{width:48px;height:48px;background:var(--stone-dark);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.auth-name{font-size:20px;font-weight:800}.auth-sub{font-size:12px;color:var(--text3);margin-top:2px}
+.auth-err{background:var(--red-light);border:1px solid var(--red-border);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:16px;display:none}
+#app{display:none;flex-direction:column;height:100vh}
+.topbar{background:var(--surface);border-bottom:1.5px solid var(--border);padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:56px;flex-shrink:0}
+.tb-left{display:flex;align-items:center;gap:11px}
+.tb-icon{width:34px;height:34px;background:var(--stone-dark);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.tb-title{font-size:14px;font-weight:800}.tb-co{font-size:11px;color:var(--text3);margin-top:1px}
+.tb-right{display:flex;align-items:center;gap:8px}
+.user-badge{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12px;color:var(--text2);font-weight:500}
+.tabs-bar{background:var(--surface);border-bottom:1.5px solid var(--border);padding:0 20px;display:flex;gap:2px;flex-shrink:0}
+.tab-btn{padding:10px 16px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;transition:all .2s;font-family:'Inter',sans-serif}
+.tab-btn.active{color:var(--amber);border-bottom-color:var(--amber)}
+.main{flex:1;overflow:hidden;display:flex}
+.cl-layout{display:flex;width:100%;height:100%;overflow:hidden}
+.clist{width:295px;flex-shrink:0;overflow-y:auto;padding:12px;border-right:1.5px solid var(--border);background:var(--surface2)}
+.cdetail{flex:1;overflow-y:auto;background:var(--surface)}
+.search-box{background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:7px 11px;display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.search-box input{border:none;background:none;outline:none;width:100%;font-size:13px;font-family:'Inter',sans-serif;color:var(--text)}
+.fsel-sm{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:7px 11px;font-size:12px;font-family:'Inter',sans-serif;background:var(--surface);color:var(--text);outline:none;margin-bottom:7px;cursor:pointer}
+.ccard{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:12px;cursor:pointer;transition:all .18s;margin-bottom:7px}
+.ccard:hover{border-color:var(--border2);box-shadow:var(--shadow)}.ccard.sel{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-light)}
+.ccard-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:7px}
+.ccard-name{font-size:13px;font-weight:700}.ccard-sub{font-size:11px;color:var(--text3);margin-top:2px}
+.ccard-tags{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px}
+.ccard-foot{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid;font-weight:500;white-space:nowrap}
+.b-stone{background:#f2ede8;color:#5a524a;border-color:var(--border)}
+.b-amber{background:var(--amber-light);color:#8a5a00;border-color:var(--amber-border)}
+.b-green{background:var(--green-light);color:var(--green);border-color:var(--green-border)}
+.b-blue{background:var(--blue-light);color:var(--blue);border-color:var(--blue-border)}
+.b-red{background:var(--red-light);color:var(--red);border-color:var(--red-border)}
+.b-purple{background:#f5e8ff;color:#6a1a9a;border-color:#d4a8f5}
+.b-tr{background:#fff3e0;color:#7a4000;border-color:#ffcc80}
+.b-ir{background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7}
+.dhead{padding:20px;border-bottom:1.5px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:5}
+.dname{font-size:20px;font-weight:800}.dsub{font-size:13px;color:var(--text3);margin-top:3px}
+.dtabs{display:flex;gap:4px;margin-top:12px}
+.dtab{padding:6px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--text3);border-radius:8px;transition:all .2s;font-family:'Inter',sans-serif}
+.dtab.active{background:var(--stone-dark);color:#fff}
+.dbody{padding:20px}
+.fg{margin-bottom:14px}
+.fl{font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+.fi,.fsel,.fta{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:9px 12px;font-size:13px;font-family:'Inter',sans-serif;color:var(--text);background:var(--surface);outline:none;transition:border-color .2s}
+.fi:focus,.fsel:focus,.fta:focus{border-color:var(--amber)}.fta{resize:vertical;min-height:72px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.fgrid .full{grid-column:1/-1}
+.chip-group{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:5px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;transition:all .18s;font-family:'Inter',sans-serif;font-weight:500;background:var(--surface2);color:var(--text2)}
+.chip:hover{border-color:var(--border2)}.chip.ca{background:var(--amber);color:#fff;border-color:var(--amber)}.chip.cd{background:var(--stone-dark);color:#fff;border-color:var(--stone-dark)}
+.check-row{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text2)}
+.check-row input{width:15px;height:15px;accent-color:var(--amber);cursor:pointer}
+.btn{padding:9px 18px;border-radius:11px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:'Inter',sans-serif;transition:all .18s}
+.btn-primary{background:var(--amber);color:#fff}.btn-primary:hover{background:#b57209}
+.btn-secondary{background:var(--bg);color:var(--text2);border:1.5px solid var(--border)}.btn-secondary:hover{background:var(--border)}
+.btn-sm{padding:5px 12px;font-size:12px;border-radius:8px}
+.btn-row{display:flex;gap:8px;margin-top:16px}.btn-row .btn{flex:1}
+.btn-dashed{width:100%;border:2px dashed var(--border);border-radius:var(--r);padding:11px;font-size:13px;color:var(--text3);cursor:pointer;background:none;font-family:'Inter',sans-serif;font-weight:600;transition:all .2s;margin-bottom:12px}
+.btn-dashed:hover{border-color:var(--amber);color:var(--amber)}
+.btn-new{background:var(--amber);color:#fff;border:none;border-radius:10px;padding:7px 15px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;width:100%;margin-top:8px}
+.btn-new:hover{background:#b57209}
+.overlay{position:fixed;inset:0;background:rgba(20,14,8,.72);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+.overlay.hidden{display:none}
+.modal{background:var(--surface);border-radius:20px;box-shadow:var(--shadow-lg);width:100%;max-width:560px;max-height:90vh;overflow-y:auto;border:1.5px solid var(--border)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);border-radius:20px 20px 0 0;z-index:1}
+.modal-title{font-size:15px;font-weight:800}
+.modal-close{width:28px;height:28px;border:none;background:none;cursor:pointer;font-size:20px;color:var(--text3);border-radius:7px;display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:var(--bg);color:var(--text)}.modal-body{padding:20px}
+.wish-add{background:var(--amber-light);border:1.5px solid var(--amber-border);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.wish-add-title{font-size:12px;font-weight:700;color:#8a5a00;margin-bottom:10px}
+.wish-item{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:8px}
+.wish-item:hover{border-color:var(--border2)}
+.wish-top{display:flex;align-items:flex-start;justify-content:space-between}
+.wish-meta{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;align-items:center}
+.wish-sel{font-size:11px;border:1px solid var(--border);border-radius:7px;padding:3px 8px;font-family:'Inter',sans-serif;background:var(--surface);outline:none;cursor:pointer}
+.icon-btn{width:26px;height:26px;border:none;background:none;cursor:pointer;color:var(--text3);border-radius:6px;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.icon-btn:hover{background:var(--red-light);color:var(--red)}
+.ord-card{border:1.5px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px}
+.ord-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.ord-title{font-weight:700;font-size:14px}.ord-sub{font-size:12px;color:var(--text3);margin-top:2px}
+.prog-track{background:var(--bg);border-radius:99px;height:6px;margin-bottom:5px;overflow:hidden}
+.prog-fill{height:100%;border-radius:99px;background:var(--amber);transition:width .4s}
+.prog-label{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:10px}
+.steps-list{display:flex;flex-direction:column;gap:5px;max-height:340px;overflow-y:auto}
+.step{border-radius:11px;border:1px solid var(--border);padding:9px 11px;transition:all .18s}
+.step.done{background:var(--green-light);border-color:var(--green-border)}
+.step.active{background:var(--amber-light);border-color:var(--amber-border)}
+.step.future{background:var(--surface2);opacity:.55}
+.step-row{display:flex;align-items:center;gap:8px}
+.step-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
+.sn-done{background:var(--green);color:#fff}.sn-active{background:var(--amber);color:#fff}.sn-future{background:var(--border);color:var(--text3)}
+.step-lbl{font-size:12px;font-weight:500;flex:1}
+.sl-done{color:var(--green)}.sl-active{color:#8a5a00;font-weight:700}.sl-future{color:var(--text3)}
+.step-date{font-size:10px;color:var(--text3);white-space:nowrap}
+.step-note{width:100%;margin-top:6px;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:'Inter',sans-serif;outline:none;background:#fff}
+.step-note:focus{border-color:var(--amber)}
+.orders-wrap{flex:1;overflow-y:auto;padding:16px}
+.orders-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.ord-sum{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:16px;transition:all .18s}
+.ord-sum:hover{border-color:var(--border2);box-shadow:var(--shadow)}
+.psec{margin-bottom:20px}
+.psec-title{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.info-row{display:flex;flex-wrap:wrap;gap:6px}
+hr.div{border:none;border-top:1px solid var(--border);margin:16px 0}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:280px;color:var(--text3);text-align:center;gap:8px}
+.empty .eicon{font-size:44px;opacity:.45}.empty p{font-size:14px;font-weight:500}
+.loader{display:flex;align-items:center;justify-content:center;padding:24px;color:var(--text3);font-size:13px;gap:8px}
+.spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.section-head{padding:14px 20px;border-bottom:1.5px solid var(--border);font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--stone-dark);color:#fff;padding:10px 22px;border-radius:11px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-icon">🪨</div>
+      <div><div class="auth-name">Stone Trading CRM</div><div class="auth-sub">Sign in to your account</div></div>
+    </div>
+    <div class="auth-err" id="auth-err"></div>
+    <div class="fg"><label class="fl">Email</label><input class="fi" type="email" id="l-email" placeholder="you@company.com" autocomplete="email"></div>
+    <div class="fg"><label class="fl">Password</label><input class="fi" type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="doLogin()" id="l-btn">Sign In</button>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="tb-left">
+      <div class="tb-icon">🪨</div>
+      <div><div class="tb-title">Stone Trading CRM</div><div class="tb-co" id="tb-co">—</div></div>
+    </div>
+    <div class="tb-right">
+      <span class="user-badge" id="user-badge">—</span>
+      <button class="btn btn-secondary btn-sm" onclick="doLogout()">Sign Out</button>
+    </div>
+  </div>
+  <div class="tabs-bar">
+    <button class="tab-btn active" onclick="switchTab('customers',this)">👥 Customers</button>
+    <button class="tab-btn" onclick="switchTab('orders',this)">📦 Active Orders</button>
+  </div>
+  <div class="main">
+    <div id="tab-customers" class="cl-layout">
+      <div class="clist">
+        <div class="search-box"><span style="color:var(--text3);font-size:13px">🔍</span><input type="text" placeholder="Search..." id="search-inp" oninput="renderCList()"></div>
+        <div id="company-filter-wrap"></div>
+        <select class="fsel-sm" id="cat-filter" onchange="renderCList()">
+          <option value="">All Categories</option>
+          <option>Marble</option><option>Travertine</option><option>Granite</option><option>Onyx</option><option>Limestone</option><option>Basalt</option><option>Quartzite</option><option>Sandstone</option>
+        </select>
+        <div id="clist-wrap"><div class="loader"><div class="spin"></div> Loading...</div></div>
+        <button class="btn-new" onclick="openAddCustomer()">+ New Customer</button>
+      </div>
+      <div class="cdetail" id="cdetail"><div class="empty"><div class="eicon">🪨</div><p>Select a customer</p></div></div>
+    </div>
+    <div id="tab-orders" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+      <div class="section-head">Active Orders <span id="orders-count" style="font-size:13px;color:var(--text3);font-weight:400"></span></div>
+      <div class="orders-wrap"><div id="all-orders-grid" class="orders-grid"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overlay" onclick="closeBg(event)">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title" id="modal-title">—</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPA_URL='https://zgosrjourokixhkdbfkg.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpnb3Nyam91cm9raXhoa2RiZmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDEzMDMsImV4cCI6MjA5NDY3NzMwM30.roXzbcJ7aveOviQqL2cwSINt5kbY8c8hrT5jS-ut8lM';
+const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+
+let currentUser=null,currentProfile=null,currentCompany=null;
+let customers=[],companies=[];
+let selectedId=null,detailTab='profile',companyFilter='';
+
+const CATS=['Marble','Travertine','Granite','Onyx','Limestone','Basalt','Quartzite','Sandstone'];
+const CHS=['whatsapp','telegram','email','phone','instagram'];
+const CH_LABEL={whatsapp:'WhatsApp',telegram:'Telegram',email:'Email',phone:'Phone',instagram:'Instagram'};
+const CH_ICON={whatsapp:'💬',telegram:'✈️',email:'✉️',phone:'📞',instagram:'📸'};
+const STATUS_LABEL={searching:'Searching',interested:'Interested',found:'Found',completed:'Completed'};
+const STATUS_COLOR={searching:'b-amber',interested:'b-blue',found:'b-green',completed:'b-stone'};
+const PRIORITY_LABEL={high:'🔴 High',medium:'🟡 Medium',low:'🟢 Low'};
+
+const STEPS_T=[
+  {k:'initial_order',l:'1. Initial Order'},
+  {k:'confirm_order',l:'2. Order Confirmation'},
+  {k:'proforma',l:'3. Proforma Invoice'},
+  {k:'advance_payment',l:'4. Advance Payment'},
+  {k:'t1',l:'5.T.1 Deliver to Crane'},
+  {k:'t2',l:'5.T.2 Declare Cargo & Request Truck'},
+  {k:'t3',l:'5.T.3 Load Stone & Deliver to Customs'},
+  {k:'t4',l:'5.T.4 Coordinate with Customs Broker'},
+  {k:'t5',l:'5.T.5 Receive Draft Road Waybill (CRM)'},
+  {k:'draft_send',l:'6.1 Send Draft to Customer for Confirmation'},
+  {k:'draft_revise',l:'6.2 Revisions if needed → repeat 6.1'},
+  {k:'export_docs',l:'7. Prepare Export Docs (CI, PL, COO)'},
+  {k:'balance',l:'8. Balance Payment'},
+  {k:'clearance',l:'9. Clearance & Send Surrender'},
+  {k:'feedback',l:'10. Customer Feedback'}
+];
+const STEPS_S=[
+  {k:'initial_order',l:'1. Initial Order'},
+  {k:'confirm_order',l:'2. Order Confirmation'},
+  {k:'proforma',l:'3. Proforma Invoice'},
+  {k:'advance_payment',l:'4. Advance Payment'},
+  {k:'s1',l:'5.S.1 Declare Cargo & Request Truck to Port'},
+  {k:'s2',l:'5.S.2 Coordinate Shipping & Book Container'},
+  {k:'s3',l:'5.S.3 Send Booking to Bandar Abbas Agent'},
+  {k:'s4',l:'5.S.4 Follow Up Container Pickup by Agent'},
+  {k:'s5',l:'5.S.5 Receive Container Photos & Videos'},
+  {k:'s6',l:'5.S.6 Receive Declaration, Packing List & VGM'},
+  {k:'s7',l:'5.S.7 Prepare & Send Shipping Order'},
+  {k:'s8',l:'5.S.8 Receive Draft BL from Shipping Line'},
+  {k:'draft_send',l:'6.1 Send Draft BL to Customer for Confirmation'},
+  {k:'draft_revise',l:'6.2 Revisions if needed → repeat 6.1'},
+  {k:'export_docs',l:'7. Prepare Export Docs (CI, PL, COO)'},
+  {k:'balance',l:'8. Balance Payment'},
+  {k:'clearance',l:'9. Clearance & Send Surrender'},
+  {k:'feedback',l:'10. Customer Feedback'}
+];
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function badge(label,cls='b-stone'){return`<span class="badge ${cls}">${esc(label)}</span>`}
+function today(){return new Date().toLocaleDateString('en-GB')}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
+function isAdmin(){return currentProfile?.role==='admin'}
+
+async function doLogin(){
+  const email=document.getElementById('l-email').value.trim();
+  const pass=document.getElementById('l-pass').value;
+  const btn=document.getElementById('l-btn');
+  const err=document.getElementById('auth-err');
+  err.style.display='none';btn.textContent='Signing in...';btn.disabled=true;
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){err.textContent=error.message;err.style.display='block';btn.textContent='Sign In';btn.disabled=false;return;}
+  await initApp(data.user);
+}
+async function doLogout(){await sb.auth.signOut();location.reload()}
+document.getElementById('l-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+
+async function initApp(user){
+  currentUser=user;
+  const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).single();
+  currentProfile=prof;
+  if(prof?.company_id){
+    const {data:comp}=await sb.from('companies').select('*').eq('id',prof.company_id).single();
+    currentCompany=comp;
+  }
+  if(isAdmin()){
+    const {data:comps}=await sb.from('companies').select('*').order('name');
+    companies=comps||[];
+    document.getElementById('company-filter-wrap').innerHTML=`
+      <select class="fsel-sm" id="co-filter" onchange="coFilterChanged(this.value)">
+        <option value="">All Companies</option>
+        ${companies.map(c=>`<option value="${c.id}">${c.name} ${c.country==='TR'?'🇹🇷':'🇮🇷'}</option>`).join('')}
+      </select>`;
+  }
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('tb-co').textContent=isAdmin()?'Admin — All Companies':currentCompany?.name||'—';
+  document.getElementById('user-badge').textContent=prof?.full_name||user.email;
+  await loadCustomers();
+}
+
+function coFilterChanged(val){companyFilter=val;loadCustomers()}
+
+async function loadCustomers(){
+  document.getElementById('clist-wrap').innerHTML='<div class="loader"><div class="spin"></div> Loading...</div>';
+  let q=sb.from('customers').select('*').order('name');
+  if(!isAdmin()) q=q.eq('company_id',currentProfile.company_id);
+  else if(companyFilter) q=q.eq('company_id',companyFilter);
+  const {data,error}=await q;
+  if(error){showToast('Error loading customers');return;}
+  customers=data||[];
+  renderCList();
+}
+
+function renderCList(){
+  const q=document.getElementById('search-inp').value.trim().toLowerCase();
+  const cat=document.getElementById('cat-filter').value;
+  const list=customers.filter(c=>{
+    const ms=!q||c.name.toLowerCase().includes(q)||(c.contact||'').toLowerCase().includes(q);
+    const mc=!cat||(c.interests?.categories||[]).includes(cat);
+    return ms&&mc;
+  });
+  const el=document.getElementById('clist-wrap');
+  if(!list.length){el.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:16px">No customers found</div>';return;}
+  el.innerHTML=list.map(c=>{
+    const tags=(c.interests?.categories||[]).slice(0,3).map(t=>badge(t)).join('');
+    const extra=(c.interests?.categories||[]).length>3?badge(`+${c.interests.categories.length-3}`):'';
+    const chs=(c.channels||[]).map(ch=>CH_ICON[ch]).join(' ');
+    const pr=c.interests?.price_range;
+    const prStr=pr?.min?`<span style="font-size:11px;color:var(--text3)">$${pr.min}–$${pr.max}</span>`:'';
+    const coName=isAdmin()&&!companyFilter?companies.find(x=>x.id===c.company_id)?.name:'';
+    const coCountry=isAdmin()&&!companyFilter?companies.find(x=>x.id===c.company_id)?.country:'';
+    return`<div class="ccard${c.id===selectedId?' sel':''}" onclick="selectCustomer('${c.id}')">
+      <div class="ccard-top">
+        <div>
+          <div class="ccard-name">${esc(c.name)}</div>
+          <div class="ccard-sub">${esc(c.contact||'')}${c.phone?' · '+esc(c.phone):''}</div>
+        </div>
+        <button style="width:26px;height:26px;border:none;background:none;cursor:pointer;color:var(--text3);border-radius:7px;font-size:13px" onclick="event.stopPropagation();openEditCustomer('${c.id}')">✏️</button>
+      </div>
+      <div class="ccard-tags">${tags}${extra}</div>
+      <div class="ccard-foot">
+        <span style="font-size:12px">${chs}</span>${prStr}
+        ${coName?badge(coName,coCountry==='TR'?'b-tr':'b-ir'):''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function selectCustomer(id){selectedId=id;detailTab='profile';renderCList();await renderDetail()}
+
+async function renderDetail(){
+  const c=customers.find(x=>x.id===selectedId);
+  if(!c){document.getElementById('cdetail').innerHTML='<div class="empty"><div class="eicon">🪨</div><p>Select a customer</p></div>';return;}
+  document.getElementById('cdetail').innerHTML='<div class="loader"><div class="spin"></div> Loading...</div>';
+  const [{data:wl},{data:ords}]=await Promise.all([
+    sb.from('wishlists').select('*').eq('customer_id',c.id).order('created_at',{ascending:false}),
+    sb.from('orders').select('*').eq('customer_id',c.id).order('created_at',{ascending:false})
+  ]);
+  const tabs=[['profile','Profile'],['wishlist',`Wishlist${wl?.length?' ('+wl.length+')':''}`],['orders',`Orders${ords?.length?' ('+ords.length+')':''}`]];
+  const tabsHtml=tabs.map(([t,l])=>`<button class="dtab${detailTab===t?' active':''}" onclick="setDTab('${t}')">${l}</button>`).join('');
+  const co=companies.find(x=>x.id===c.company_id);
+  const coBadge=co?badge(co.name,co.country==='TR'?'b-tr':'b-ir'):'';
+  let body='';
+  if(detailTab==='profile') body=renderProfile(c);
+  else if(detailTab==='wishlist') body=renderWishlist(c,wl||[]);
+  else body=renderOrders(c,ords||[]);
+  document.getElementById('cdetail').innerHTML=`
+    <div class="dhead">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between">
+        <div>
+          <div class="dname">${esc(c.name)}</div>
+          <div class="dsub" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${c.contact?`<span>${esc(c.contact)}</span>`:''}
+            ${c.phone?`<span>· ${esc(c.phone)}</span>`:''}
+            ${isAdmin()&&coBadge?coBadge:''}
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="openEditCustomer('${c.id}')">Edit</button>
+      </div>
+      <div class="dtabs">${tabsHtml}</div>
+    </div>
+    <div class="dbody">${body}</div>`;
+}
+
+function setDTab(t){detailTab=t;renderDetail()}
+
+function renderProfile(c){
+  const chHtml=(c.channels||[]).map(ch=>`<span class="chip cd" style="cursor:default">${CH_ICON[ch]} ${CH_LABEL[ch]}</span>`).join('');
+  const catHtml=(c.interests?.categories||[]).map(t=>badge(t)).join(' ');
+  const pr=c.interests?.price_range||{};
+  const dims=(c.interests?.dimensions||[]).join(', ');
+  const sends=[
+    badge(c.send_price?'✓ Price':'✗ Price',c.send_price?'b-green':'b-red'),
+    badge(c.send_dimensions?'✓ Dimensions':'✗ Dimensions',c.send_dimensions?'b-green':'b-red'),
+    badge(c.send_slab_photo?'✓ Slab Photo':'✗ Slab Photo',c.send_slab_photo?'b-green':'b-red')
+  ].join('');
+  return`
+    <div class="psec"><div class="psec-title">Communication Channels</div><div class="info-row">${chHtml||'<span style="color:var(--text3);font-size:12px">Not set</span>'}</div></div>
+    <hr class="div">
+    <div class="psec"><div class="psec-title">Send when introducing new product</div><div class="info-row">${sends}</div></div>
+    <hr class="div">
+    <div class="psec"><div class="psec-title">Stone Categories of Interest</div><div class="info-row">${catHtml||'<span style="color:var(--text3);font-size:12px">Not set</span>'}</div></div>
+    ${pr.min?`<hr class="div"><div class="psec"><div class="psec-title">Price Range</div><span style="font-size:16px;font-weight:700">$${pr.min} – $${pr.max} / m²</span></div>`:''}
+    ${dims?`<hr class="div"><div class="psec"><div class="psec-title">Preferred Dimensions</div><span style="font-size:13px;color:var(--text2)">${esc(dims)}</span></div>`:''}
+    ${c.interests?.notes?`<hr class="div"><div class="psec"><div class="psec-title">Notes</div><p style="font-size:13px;color:var(--text2);background:var(--surface2);border-radius:11px;padding:12px;line-height:1.7">${esc(c.interests.notes)}</p></div>`:''}`;
+}
+
+function renderWishlist(c,items){
+  const list=items.length?items.map(item=>`
+    <div class="wish-item">
+      <div class="wish-top">
+        <span style="font-size:13px;font-weight:700">${esc(item.stone)}</span>
+        <div style="display:flex;align-items:center;gap:4px">
+          <select class="wish-sel" onchange="updateWishStatus('${item.id}',this.value)">
+            <option value="searching"${item.status==='searching'?' selected':''}>Searching</option>
+            <option value="interested"${item.status==='interested'?' selected':''}>Interested</option>
+            <option value="found"${item.status==='found'?' selected':''}>Found</option>
+            <option value="completed"${item.status==='completed'?' selected':''}>Completed</option>
+          </select>
+          <button class="icon-btn" onclick="removeWish('${item.id}')">×</button>
+        </div>
+      </div>
+      <div class="wish-meta">
+        ${badge(STATUS_LABEL[item.status],STATUS_COLOR[item.status])}
+        <span style="font-size:11px;color:var(--text3)">${PRIORITY_LABEL[item.priority]}</span>
+        <span style="font-size:11px;color:var(--text3)">${new Date(item.created_at).toLocaleDateString('en-GB')}</span>
+      </div>
+      ${item.notes?`<div style="font-size:11px;color:var(--text3);margin-top:5px">${esc(item.notes)}</div>`:''}
+    </div>`).join(''):'<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">No items yet</div>';
+  return`
+    <div class="wish-add">
+      <div class="wish-add-title">+ Add New Item</div>
+      <div class="fgrid">
+        <input class="fi full" id="w-stone" placeholder="Stone name...">
+        <select class="fsel" id="w-pri"><option value="high">High Priority 🔴</option><option value="medium" selected>Medium 🟡</option><option value="low">Low 🟢</option></select>
+        <input class="fi" id="w-notes" placeholder="Notes (optional)">
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="addWishItem('${c.id}','${c.company_id}')">Add</button>
+    </div>${list}`;
+}
+
+function renderOrders(c,orders){
+  const html=orders.map(o=>{
+    const steps=o.transport_type==='T'?STEPS_T:STEPS_S;
+    const pct=Math.round((o.current_step/(steps.length-1))*100);
+    const cur=steps[o.current_step]?.l||'Completed ✓';
+    const stHtml=steps.map((s,i)=>{
+      const done=i<o.current_step,active=i===o.current_step;
+      const cls=done?'done':active?'active':'future';
+      const note=(o.step_notes||{})[s.k]||'';
+      const date=(o.step_dates||{})[s.k]||'';
+      return`<div class="step ${cls}">
+        <div class="step-row">
+          <div class="step-num ${done?'sn-done':active?'sn-active':'sn-future'}">${done?'✓':i+1}</div>
+          <span class="step-lbl ${done?'sl-done':active?'sl-active':'sl-future'}">${s.l}</span>
+          ${date?`<span class="step-date">${date}</span>`:''}
+          ${active?`<button class="btn btn-primary btn-sm" onclick="completeStep('${o.id}','${s.k}',${i},${steps.length})">Done ✓</button>`:''}
+        </div>
+        ${(active||done)?`<input class="step-note" placeholder="Note..." value="${esc(note)}" onchange="saveStepNote('${o.id}','${s.k}',this.value)">`:''}
+      </div>`;
+    }).join('');
+    return`<div class="ord-card">
+      <div class="ord-head">
+        <div><div class="ord-title">${esc(o.stone)}</div><div class="ord-sub">${esc(o.quantity||'')} ${esc(o.unit||'')} · ${new Date(o.created_at).toLocaleDateString('en-GB')}</div></div>
+        ${badge(o.transport_type==='T'?'🚛 Land (T)':'🚢 Sea (S)',o.transport_type==='T'?'b-amber':'b-blue')}
+      </div>
+      <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
+      <div class="prog-label"><span>${cur}</span><span style="color:var(--amber);font-weight:700">${pct}%</span></div>
+      <div class="steps-list">${stHtml}</div>
+    </div>`;
+  }).join('');
+  return`<button class="btn-dashed" onclick="openAddOrder('${c.id}','${esc(c.name)}','${c.company_id}')">+ New Order</button>
+    ${orders.length===0?'<div style="text-align:center;color:var(--text3);font-size:12px;padding:16px">No orders yet</div>':html}`;
+}
+
+async function addWishItem(customerId,companyId){
+  const stone=document.getElementById('w-stone').value.trim();
+  if(!stone){showToast('Enter stone name');return;}
+  const {error}=await sb.from('wishlists').insert({customer_id:customerId,company_id:companyId,stone,priority:document.getElementById('w-pri').value,notes:document.getElementById('w-notes').value.trim(),status:'searching'});
+  if(error){showToast('Error: '+error.message);return;}
+  showToast('Added ✓');renderDetail();
+}
+async function updateWishStatus(id,status){await sb.from('wishlists').update({status}).eq('id',id);renderDetail()}
+async function removeWish(id){await sb.from('wishlists').delete().eq('id',id);renderDetail()}
+
+async function completeStep(orderId,stepKey,stepIdx,totalSteps){
+  const newStep=Math.min(stepIdx+1,totalSteps-1);
+  const {data:ord}=await sb.from('orders').select('step_dates').eq('id',orderId).single();
+  const dates={...(ord?.step_dates||{}),[stepKey]:today()};
+  await sb.from('orders').update({current_step:newStep,step_dates:dates}).eq('id',orderId);
+  showToast('Step completed ✓');renderDetail();
+}
+async function saveStepNote(orderId,stepKey,val){
+  const {data:ord}=await sb.from('orders').select('step_notes').eq('id',orderId).single();
+  await sb.from('orders').update({step_notes:{...(ord?.step_notes||{}),[stepKey]:val}}).eq('id',orderId);
+}
+
+async function renderAllOrders(){
+  const el=document.getElementById('all-orders-grid');
+  el.innerHTML='<div class="loader" style="grid-column:1/-1"><div class="spin"></div> Loading...</div>';
+  let q=sb.from('orders').select('*, customers(name,company_id)').eq('status','active').order('created_at',{ascending:false});
+  const {data}=await q;
+  const orders=data||[];
+  document.getElementById('orders-count').textContent=orders.length?`(${orders.length})`:'';
+  if(!orders.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="eicon">📦</div><p>No active orders</p></div>';return;}
+  el.innerHTML=orders.map(o=>{
+    const steps=o.transport_type==='T'?STEPS_T:STEPS_S;
+    const pct=Math.round((o.current_step/(steps.length-1))*100);
+    const cur=steps[o.current_step]?.l||'Completed ✓';
+    const co=companies.find(x=>x.id===o.customers?.company_id);
+    return`<div class="ord-sum">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div style="font-weight:700;font-size:14px">${esc(o.stone)}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+            <span>${esc(o.customers?.name||'')}</span>
+            ${co?badge(co.name,co.country==='TR'?'b-tr':'b-ir'):''}
+            <span>· ${esc(o.quantity||'')} ${esc(o.unit||'')}</span>
+          </div>
+        </div>
+        ${badge(o.transport_type==='T'?'🚛 Land':'🚢 Sea',o.transport_type==='T'?'b-amber':'b-blue')}
+      </div>
+      <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
+      <div class="prog-label"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${cur}</span><span style="color:var(--amber);font-weight:700;flex-shrink:0">${pct}%</span></div>
+    </div>`;
+  }).join('');
+}
+
+function switchTab(tab,btn){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-customers').style.display=tab==='customers'?'flex':'none';
+  document.getElementById('tab-orders').style.display=tab==='orders'?'flex':'none';
+  if(tab==='orders') renderAllOrders();
+}
+
+function openModal(title,html){document.getElementById('modal-title').textContent=title;document.getElementById('modal-body').innerHTML=html;document.getElementById('overlay').classList.remove('hidden')}
+function closeModal(){document.getElementById('overlay').classList.add('hidden')}
+function closeBg(e){if(e.target===document.getElementById('overlay'))closeModal()}
+
+function customerFormHtml(c={}){
+  const chipsC=CHS.map(ch=>`<button type="button" class="chip${(c.channels||[]).includes(ch)?' ca':''}" onclick="this.classList.toggle('ca')" data-ch="${ch}">${CH_ICON[ch]} ${CH_LABEL[ch]}</button>`).join('');
+  const chipsK=CATS.map(cat=>`<button type="button" class="chip${(c.interests?.categories||[]).includes(cat)?' cd':''}" onclick="this.classList.toggle('cd')" data-cat="${cat}">${cat}</button>`).join('');
+  const pr=c.interests?.price_range||{};
+  const dims=(c.interests?.dimensions||[]).join(', ');
+  const coSel=isAdmin()?`<div class="fg full"><label class="fl">Company</label><select class="fsel" id="fc-co">
+    ${companies.map(co=>`<option value="${co.id}"${c.company_id===co.id?' selected':''}>${co.name} ${co.country==='TR'?'🇹🇷':'🇮🇷'}</option>`).join('')}
+  </select></div>`:'';
+  return`
+    <div class="fgrid">
+      ${coSel}
+      <div class="fg full"><label class="fl">Company / Customer Name</label><input class="fi" id="fc-name" value="${esc(c.name||'')}"></div>
+      <div class="fg"><label class="fl">Contact Person</label><input class="fi" id="fc-contact" value="${esc(c.contact||'')}"></div>
+      <div class="fg"><label class="fl">Phone</label><input class="fi" id="fc-phone" value="${esc(c.phone||'')}"></div>
+    </div>
+    <div class="fg"><label class="fl">Communication Channels</label><div class="chip-group" id="chips-ch">${chipsC}</div></div>
+    <div class="fg"><label class="fl">Send when introducing a new product</label>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <label class="check-row"><input type="checkbox" id="fc-price"${c.send_price!==false?' checked':''}> Price</label>
+        <label class="check-row"><input type="checkbox" id="fc-dims"${c.send_dimensions!==false?' checked':''}> Dimensions</label>
+        <label class="check-row"><input type="checkbox" id="fc-slab"${c.send_slab_photo!==false?' checked':''}> Slab Photo</label>
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Stone Categories of Interest</label><div class="chip-group" id="chips-cat">${chipsK}</div></div>
+    <div class="fgrid">
+      <div class="fg"><label class="fl">Min Price ($/m²)</label><input type="number" class="fi" id="fc-pmin" value="${esc(pr.min||'')}"></div>
+      <div class="fg"><label class="fl">Max Price ($/m²)</label><input type="number" class="fi" id="fc-pmax" value="${esc(pr.max||'')}"></div>
+      <div class="fg full"><label class="fl">Preferred Dimensions (e.g. 60x60, 80x80)</label><input class="fi" id="fc-dimsv" value="${esc(dims)}"></div>
+    </div>
+    <div class="fg"><label class="fl">Notes</label><textarea class="fta" id="fc-notes">${esc(c.interests?.notes||'')}</textarea></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveCustomerForm('${c.id||''}')">Save</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`;
+}
+
+function openAddCustomer(){openModal('New Customer',customerFormHtml())}
+function openEditCustomer(id){const c=customers.find(x=>x.id===id);openModal('Edit Customer',customerFormHtml(c))}
+
+async function saveCustomerForm(id){
+  const name=document.getElementById('fc-name').value.trim();
+  if(!name){showToast('Enter customer name');return;}
+  const channels=[...document.querySelectorAll('#chips-ch .chip.ca')].map(el=>el.dataset.ch);
+  const cats=[...document.querySelectorAll('#chips-cat .chip.cd')].map(el=>el.dataset.cat);
+  const dimsRaw=document.getElementById('fc-dimsv').value.trim();
+  const dims=dimsRaw?dimsRaw.split(',').map(d=>d.trim()).filter(Boolean):[];
+  const coId=isAdmin()?document.getElementById('fc-co').value:currentProfile.company_id;
+  const obj={name,contact:document.getElementById('fc-contact').value.trim(),phone:document.getElementById('fc-phone').value.trim(),channels,send_price:document.getElementById('fc-price').checked,send_dimensions:document.getElementById('fc-dims').checked,send_slab_photo:document.getElementById('fc-slab').checked,interests:{categories:cats,price_range:{min:document.getElementById('fc-pmin').value,max:document.getElementById('fc-pmax').value},dimensions:dims,notes:document.getElementById('fc-notes').value.trim()},company_id:coId};
+  let error;
+  if(id){({error}=await sb.from('customers').update(obj).eq('id',id));}
+  else{({error}=await sb.from('customers').insert(obj));}
+  if(error){showToast('Error: '+error.message);return;}
+  closeModal();showToast('Saved ✓');
+  await loadCustomers();
+  if(id&&selectedId===id) renderDetail();
+}
+
+let _transport='S';
+function openAddOrder(customerId,customerName,companyId){
+  _transport='S';
+  openModal(`New Order — ${customerName}`,`
+    <div class="fgrid">
+      <div class="fg full"><label class="fl">Stone / Product Name</label><input class="fi" id="fo-stone" placeholder="e.g. White Calacatta Marble"></div>
+      <div class="fg"><label class="fl">Quantity</label><input class="fi" id="fo-qty" placeholder="500"></div>
+      <div class="fg"><label class="fl">Unit</label><select class="fsel" id="fo-unit"><option>m²</option><option>Ton</option><option>Pallet</option><option>Container</option></select></div>
+      <div class="fg full"><label class="fl">Transport Type</label>
+        <div class="chip-group">
+          <button type="button" class="chip" id="chip-T" onclick="selTrans('T')">🚛 Land (T) — Direct by truck to destination</button>
+          <button type="button" class="chip cd" id="chip-S" onclick="selTrans('S')">🚢 Sea (S) — Truck to port, then by ship</button>
+        </div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveOrder('${customerId}','${companyId}')">Create Order</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`);
+}
+function selTrans(t){_transport=t;document.getElementById('chip-T').className='chip'+(t==='T'?' cd':'');document.getElementById('chip-S').className='chip'+(t==='S'?' cd':'')}
+async function saveOrder(customerId,companyId){
+  const stone=document.getElementById('fo-stone').value.trim();
+  if(!stone){showToast('Enter stone name');return;}
+  const {error}=await sb.from('orders').insert({customer_id:customerId,company_id:companyId,stone,quantity:document.getElementById('fo-qty').value,unit:document.getElementById('fo-unit').value,transport_type:_transport,current_step:0,step_notes:{},step_dates:{},status:'active'});
+  if(error){showToast('Error: '+error.message);return;}
+  closeModal();showToast('Order created ✓');detailTab='orders';renderDetail();
+}
+
+(async()=>{
+  const {data:{session}}=await sb.auth.getSession();
+  if(session) await initApp(session.user);
+})();
+</script>
+</body>
+</html>
