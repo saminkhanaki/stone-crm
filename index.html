@@ -720,8 +720,13 @@ function renderOrderCard(o,inDetail=false){
     </div>`;
 
   // FINANCIALS
-  const totalRec=rec.reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
-  const totalPay=pay.reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
+  const toUSD=(amount,currency,rate)=>{
+    if(!amount) return 0;
+    if(currency==='USD'||!rate) return parseFloat(amount)||0;
+    return (parseFloat(amount)||0)/(parseFloat(rate)||1);
+  };
+  const totalRec=rec.reduce((s,t)=>s+toUSD(t.amount,t.currency,t.usd_rate),0);
+  const totalPay=pay.reduce((s,t)=>s+toUSD(t.amount,t.currency,t.usd_rate),0);
   const balance=totalRec-totalPay;
   const txRow=(t,i,type)=>{
     const filesHtml2=(t.files||[]).map(f=>`<a class="step-file-item" href="${esc(f.url)}" target="_blank">${fileIcon(f.name)} ${esc(f.name.length>16?f.name.slice(0,14)+'…':f.name)}</a>`).join('');
@@ -995,15 +1000,15 @@ function renderOrdersList(){
   }).join('');
 }
 
-async function selectOrder(id){
+let currentOrdTab='steps';
+async function selectOrder(id,keepTab=false){
+  if(!keepTab) currentOrdTab='steps';
   selectedOrderId=id;
   renderOrdersList();
   const panel=document.getElementById('order-detail-panel');
   panel.innerHTML='<div class="loader"><div class="spin"></div> Loading...</div>';
-  // re-fetch fresh data
   const {data:o}=await sb.from('orders').select('*, customers(name,company_id)').eq('id',id).single();
   if(!o){panel.innerHTML='<div class="empty"><div class="eicon">📦</div><p>Not found</p></div>';return;}
-  // update in allOrders cache
   allOrders=allOrders.map(x=>x.id===id?o:x);
   renderOrderDetail(o);
 }
@@ -1019,8 +1024,13 @@ function renderOrderDetail(o){
   const fin=o.financials||{receivables:[],payables:[]};
   const rec=fin.receivables||[];
   const pay=fin.payables||[];
-  const totalRec=rec.reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
-  const totalPay=pay.reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
+  const toUSD=(amount,currency,rate)=>{
+    if(!amount) return 0;
+    if(currency==='USD'||!rate) return parseFloat(amount)||0;
+    return (parseFloat(amount)||0)/(parseFloat(rate)||1);
+  };
+  const totalRec=rec.reduce((s,t)=>s+toUSD(t.amount,t.currency,t.usd_rate),0);
+  const totalPay=pay.reduce((s,t)=>s+toUSD(t.amount,t.currency,t.usd_rate),0);
   const balance=totalRec-totalPay;
 
   // STEPS HTML
@@ -1103,11 +1113,15 @@ function renderOrderDetail(o){
   // FINANCIALS HTML
   const txRow=(t,i,type)=>{
     const filesHtml2=(t.files||[]).map(f=>`<a class="step-file-item" href="${esc(f.url)}" target="_blank">${fileIcon(f.name)} ${esc(f.name.length>16?f.name.slice(0,14)+"…":f.name)}</a>`).join('');
+    const usdVal=t.currency!=='USD'&&t.usd_rate?`<span style="font-size:10px;color:var(--text3);margin-left:4px">= ${(toUSD(t.amount,t.currency,t.usd_rate)).toFixed(0)} USD @ ${t.usd_rate}</span>`:'';
     return`<div style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:6px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
         <div style="flex:1">
           <div style="font-size:12px;font-weight:600">${esc(t.desc)}</div>
-          <div style="font-size:13px;font-weight:700;color:${type==='rec'?'var(--green)':'var(--red)'}">${type==='rec'?'+':'-'}${t.amount} ${t.currency||'USD'}</div>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+            <span style="font-size:13px;font-weight:700;color:${type==='rec'?'var(--green)':'var(--red)'}">${type==='rec'?'+':'-'}${t.amount} ${t.currency||'USD'}</span>
+            ${usdVal}
+          </div>
           ${t.date?`<div style="font-size:10px;color:var(--text3)">${t.date}</div>`:''}
           ${t.notes?`<div style="font-size:11px;color:var(--text3)">${esc(t.notes)}</div>`:''}
         </div>
@@ -1128,7 +1142,7 @@ function renderOrderDetail(o){
         <div style="font-size:16px;font-weight:800;color:var(--red)">-${totalPay.toFixed(0)}</div>
       </div>
       <div style="background:${balance>=0?'var(--teal-light)':'var(--red-light)'};border:1px solid ${balance>=0?'var(--teal-border)':'var(--red-border)'};border-radius:10px;padding:10px;text-align:center">
-        <div style="font-size:10px;font-weight:700;color:${balance>=0?'var(--teal)':'var(--red)'};text-transform:uppercase;margin-bottom:3px">Balance</div>
+        <div style="font-size:10px;font-weight:700;color:${balance>=0?'var(--teal)':'var(--red)'};text-transform:uppercase;margin-bottom:3px">Balance (USD)</div>
         <div style="font-size:16px;font-weight:800;color:${balance>=0?'var(--teal)':'var(--red)'}">${balance>=0?'+':''}${balance.toFixed(0)}</div>
       </div>
     </div>
@@ -1152,27 +1166,27 @@ function renderOrderDetail(o){
       ${o.customs_agent_name?`<div><b>Customs:</b> ${esc(o.customs_agent_name)}${o.customs_agent_phone?' · 📞 '+esc(o.customs_agent_phone):''}${o.customs_agent_email?' · ✉️ '+esc(o.customs_agent_email):''}</div>`:''}
     </div>`:'';
 
+  const supplierCo=companies.find(x=>x.id===o.company_id);
   panel.innerHTML=`
     <div style="padding:16px 20px;border-bottom:1.5px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:5">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:17px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.stone)}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span>${esc(o.customers?.name||'')}</span>
-            ${co?badge(co.name,co.country==='TR'?'b-tr':'b-ir'):''}
-            ${badge(o.transport_type==='T'?'🚛 Land':'🚢 Sea',o.transport_type==='T'?'b-amber':'b-blue')}
-          </div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${supplierCo?esc(supplierCo.name)+(supplierCo.country==='TR'?' 🇹🇷':' 🇮🇷'):''}</div>
+          <div style="font-size:18px;font-weight:800;line-height:1.2">${esc(o.customers?.name||'—')}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text2);margin-top:3px">${esc(o.stone)}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">📅 ${new Date(o.created_at).toLocaleDateString('en-GB')} &nbsp;·&nbsp; ${esc(o.quantity||'')} ${esc(o.unit||'')}</div>
         </div>
-        <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border);flex-shrink:0" onclick="deleteOrderOrd('${o.id}','${esc(o.stone)}')">🗑 Delete</button>
+        <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border);flex-shrink:0" onclick="deleteOrderOrd('${o.id}','${esc(o.stone)}')">🗑</button>
       </div>
-      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;font-size:12px;color:var(--text2)">
-        <span>📍 ${esc(o.destination||'—')}</span>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12px;color:var(--text2);display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+        <span>${badge(o.transport_type==='T'?'🚛 Land':'🚢 Sea',o.transport_type==='T'?'b-amber':'b-blue')}</span>
+        <span>📍 <b>${esc(o.destination||'—')}</b></span>
         <span>💱 ${esc(o.delivery_term||'CNF')}</span>
         ${o.port_of_load?`<span>⚓ ${esc(o.port_of_load)}</span>`:''}
-        <span>${esc(o.quantity||'')} ${esc(o.unit||'')}</span>
-        <span>📅 ${new Date(o.created_at).toLocaleDateString('en-GB')}</span>
+        ${o.shipping_agent_name?`<span>🚢 ${esc(o.shipping_agent_name)}${o.shipping_agent_phone?' · '+esc(o.shipping_agent_phone):''}</span>`:''}
+        ${o.customs_agent_name?`<span>🏛 ${esc(o.customs_agent_name)}${o.customs_agent_phone?' · '+esc(o.customs_agent_phone):''}</span>`:''}
       </div>
-      <div style="margin-top:8px">
+      <div style="margin-bottom:10px">
         <div style="background:var(--bg);border-radius:99px;height:5px;overflow:hidden;margin-bottom:4px">
           <div style="height:100%;border-radius:99px;background:var(--amber);width:${pct}%;transition:width .4s"></div>
         </div>
@@ -1181,20 +1195,20 @@ function renderOrderDetail(o){
         </div>
       </div>
       <div style="display:flex;gap:3px;margin-top:12px" id="ord-tabs-${o.id}">
-        <button class="dtab active" onclick="switchOrdDetailTab('${o.id}','steps',this)">Steps</button>
-        <button class="dtab" onclick="switchOrdDetailTab('${o.id}','packing',this)">Packing ${packingList.length?badge(packingList.length,'b-stone'):''}</button>
-        <button class="dtab" onclick="switchOrdDetailTab('${o.id}','fin',this)">Financials ${(rec.length||pay.length)?badge(rec.length+pay.length,'b-amber'):''}</button>
+        <button class="dtab${currentOrdTab==='steps'?' active':''}" onclick="switchOrdDetailTab('${o.id}','steps',this)">Steps</button>
+        <button class="dtab${currentOrdTab==='packing'?' active':''}" onclick="switchOrdDetailTab('${o.id}','packing',this)">Packing ${packingList.length?badge(packingList.length,'b-stone'):''}</button>
+        <button class="dtab${currentOrdTab==='fin'?' active':''}" onclick="switchOrdDetailTab('${o.id}','fin',this)">Financials ${(rec.length||pay.length)?badge(rec.length+pay.length,'b-amber'):''}</button>
       </div>
     </div>
     <div style="padding:16px">
-      ${agentHtml}
-      <div id="ord-steps-${o.id}"><div class="steps-list">${stHtml}</div></div>
-      <div id="ord-packing-${o.id}" style="display:none">${packingHtml}</div>
-      <div id="ord-fin-${o.id}" style="display:none">${finHtml}</div>
+      <div id="ord-steps-${o.id}"${currentOrdTab!=='steps'?' style="display:none"':''}><div class="steps-list">${stHtml}</div></div>
+      <div id="ord-packing-${o.id}"${currentOrdTab==='packing'?'':' style="display:none"'}>${packingHtml}</div>
+      <div id="ord-fin-${o.id}"${currentOrdTab==='fin'?'':' style="display:none"'}>${finHtml}</div>
     </div>`;
 }
 
 function switchOrdDetailTab(ordId,tab,btn){
+  currentOrdTab=tab;
   const tabsEl=document.getElementById(`ord-tabs-${ordId}`);
   if(tabsEl) tabsEl.querySelectorAll('.dtab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
@@ -1216,11 +1230,11 @@ async function completeStepOrd(orderId,stepKey,stepIdx,totalSteps){
   const {data:ord}=await sb.from('orders').select('step_dates').eq('id',orderId).single();
   const dates={...(ord?.step_dates||{}),[stepKey]:today()};
   await sb.from('orders').update({current_step:newStep,step_dates:dates}).eq('id',orderId);
-  showToast('Step completed ✓');await selectOrder(orderId);renderOrdersList();
+  showToast('Step completed ✓');await selectOrder(orderId,true);renderOrdersList();
 }
 async function undoStepOrd(orderId,stepIdx){
   await sb.from('orders').update({current_step:stepIdx-1}).eq('id',orderId);
-  showToast('Step undone ↩');await selectOrder(orderId);renderOrdersList();
+  showToast('Step undone ↩');await selectOrder(orderId,true);renderOrdersList();
 }
 async function saveStepNoteOrd(orderId,stepKey,val){
   const {data:ord}=await sb.from('orders').select('step_notes').eq('id',orderId).single();
@@ -1235,7 +1249,7 @@ async function uploadStepFileOrd(orderId,stepKey,input){
     const sf={...(ord?.step_files||{})};
     sf[stepKey]=[...(sf[stepKey]||[]),{name:file.name,url:r.url}];
     await sb.from('orders').update({step_files:sf}).eq('id',orderId);
-    showToast('File uploaded ✓');await selectOrder(orderId);
+    showToast('File uploaded ✓');await selectOrder(orderId,true);
   }catch(e){showToast('Upload failed: '+e.message);}
 }
 // PACKING LIST
@@ -1243,13 +1257,13 @@ async function addPackingRow(ordId){
   const {data:ord}=await sb.from('orders').select('packing_list').eq('id',ordId).single();
   const list=[...(ord?.packing_list||[]),{mark:'',quarry:'',dimensions:'',port_weight:'',container_no:'',description:''}];
   await sb.from('orders').update({packing_list:list}).eq('id',ordId);
-  await selectOrder(ordId);
+  await selectOrder(ordId,true);
 }
 async function removePackingRow(ordId,idx){
   const {data:ord}=await sb.from('orders').select('packing_list').eq('id',ordId).single();
   const list=(ord?.packing_list||[]).filter((_,i)=>i!==idx);
   await sb.from('orders').update({packing_list:list}).eq('id',ordId);
-  await selectOrder(ordId);
+  await selectOrder(ordId,true);
 }
 async function updatePackingRow(ordId,idx,field,val){
   const {data:ord}=await sb.from('orders').select('packing_list').eq('id',ordId).single();
@@ -1271,14 +1285,14 @@ async function uploadContainerMedia(ordId,input){
       media.push({name:file.name,url:r.url});
     }
     await sb.from('orders').update({container_media:media}).eq('id',ordId);
-    showToast('Uploaded ✓');await selectOrder(ordId);
+    showToast('Uploaded ✓');await selectOrder(ordId,true);
   }catch(e){showToast('Upload failed');}
 }
 async function deleteContainerMedia(ordId,idx){
   const {data:ord}=await sb.from('orders').select('container_media').eq('id',ordId).single();
   const media=(ord?.container_media||[]).filter((_,i)=>i!==idx);
   await sb.from('orders').update({container_media:media}).eq('id',ordId);
-  await selectOrder(ordId);
+  await selectOrder(ordId,true);
 }
 
 // DELETE STEP FILE
@@ -1288,14 +1302,27 @@ async function deleteStepFile(ordId,stepKey,fileIdx){
   const sf={...(ord?.step_files||{})};
   if(sf[stepKey]) sf[stepKey]=sf[stepKey].filter((_,i)=>i!==fileIdx);
   await sb.from('orders').update({step_files:sf}).eq('id',ordId);
-  showToast('File removed');await selectOrder(ordId);
+  showToast('File removed');await selectOrder(ordId,true);
 }
 function openAddTxOrd(ordId,type){
   openModal(type==='rec'?'Add Receivable':'Add Payable',`
     <div class="fg"><label class="fl">Description *</label><input class="fi" id="tx-desc" placeholder="${type==='rec'?'e.g. Advance Payment':'e.g. Quarry, Freight, Customs'}"></div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
       <div class="fg"><label class="fl">Amount *</label><input type="number" class="fi" id="tx-amount" placeholder="0"></div>
-      <div class="fg"><label class="fl">Currency</label><select class="fsel" id="tx-currency" style="width:auto"><option value="USD" selected>USD</option><option value="EUR">EUR</option><option value="CNY">CNY</option><option value="TRY">TRY</option><option value="IRR">IRR</option></select></div>
+      <div class="fg"><label class="fl">Currency</label>
+        <select class="fsel" id="tx-currency" style="width:auto" onchange="toggleTxRate(this.value)">
+          <option value="USD" selected>USD</option>
+          <option value="EUR">EUR</option>
+          <option value="CNY">CNY</option>
+          <option value="TRY">TRY</option>
+          <option value="IRR">IRR</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg" id="tx-rate-wrap" style="display:none">
+      <label class="fl">Exchange Rate to USD <span class="required-mark">*</span></label>
+      <input type="number" class="fi" id="tx-rate" placeholder="e.g. 0.031 for TRY, 1.08 for EUR" step="any">
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">1 selected currency = ? USD &nbsp;(e.g. 1 EUR = 1.08 USD → enter 1.08)</div>
     </div>
     <div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="tx-date"></div>
     <div class="fg"><label class="fl">Notes</label><input class="fi" id="tx-notes" placeholder="Optional"></div>
@@ -1304,18 +1331,25 @@ function openAddTxOrd(ordId,type){
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
     </div>`);
 }
+function toggleTxRate(currency){
+  const wrap=document.getElementById('tx-rate-wrap');
+  if(wrap) wrap.style.display=currency==='USD'?'none':'';
+}
 async function saveTxOrd(ordId,type){
   const desc=document.getElementById('tx-desc').value.trim();
   const amount=document.getElementById('tx-amount').value;
+  const currency=document.getElementById('tx-currency').value;
+  const usd_rate=document.getElementById('tx-rate')?.value||null;
   if(!desc||!amount){showToast('Fill required fields');return;}
+  if(currency!=='USD'&&!usd_rate){showToast('Enter exchange rate to USD');return;}
   const dateVal=document.getElementById('tx-date').value;
-  const tx={desc,amount:parseFloat(amount),currency:document.getElementById('tx-currency').value,date:dateVal?new Date(dateVal).toLocaleDateString('en-GB'):'',notes:document.getElementById('tx-notes').value.trim(),files:[]};
+  const tx={desc,amount:parseFloat(amount),currency,usd_rate:usd_rate?parseFloat(usd_rate):null,date:dateVal?new Date(dateVal).toLocaleDateString('en-GB'):'',notes:document.getElementById('tx-notes').value.trim(),files:[]};
   const {data:ord}=await sb.from('orders').select('financials').eq('id',ordId).single();
   const fin=ord?.financials||{receivables:[],payables:[]};
   if(type==='rec') fin.receivables=[...(fin.receivables||[]),tx];
   else fin.payables=[...(fin.payables||[]),tx];
   await sb.from('orders').update({financials:fin}).eq('id',ordId);
-  closeModal();showToast('Saved ✓');await selectOrder(ordId);renderOrdersList();
+  closeModal();showToast('Saved ✓');await selectOrder(ordId,true);renderOrdersList();
 }
 async function removeTxOrd(ordId,type,idx){
   const {data:ord}=await sb.from('orders').select('financials').eq('id',ordId).single();
@@ -1323,7 +1357,7 @@ async function removeTxOrd(ordId,type,idx){
   if(type==='rec') fin.receivables=(fin.receivables||[]).filter((_,i)=>i!==idx);
   else fin.payables=(fin.payables||[]).filter((_,i)=>i!==idx);
   await sb.from('orders').update({financials:fin}).eq('id',ordId);
-  await selectOrder(ordId);renderOrdersList();
+  await selectOrder(ordId,true);renderOrdersList();
 }
 async function uploadTxFileOrd(ordId,type,idx,input){
   const file=input.files[0];if(!file)return;
@@ -1335,7 +1369,7 @@ async function uploadTxFileOrd(ordId,type,idx,input){
     const arr=type==='rec'?fin.receivables:fin.payables;
     if(arr[idx]) arr[idx].files=[...(arr[idx].files||[]),{name:file.name,url:r.url}];
     await sb.from('orders').update({financials:fin}).eq('id',ordId);
-    showToast('File attached ✓');await selectOrder(ordId);
+    showToast('File attached ✓');await selectOrder(ordId,true);
   }catch(e){showToast('Upload failed');}
 }
 
