@@ -307,7 +307,7 @@ const makeStepsS=(portOfLoad)=>[
   {k:'s2',l:'Coordinate Shipping & Book Container',files:[]},
   {k:'s3',l:`Send Booking to ${portOfLoad||'Port'} Agent`,files:[]},
   {k:'s4',l:'Follow Up Container Pickup by Agent',files:[]},
-  {k:'s5',l:'Receive Container Photos & Videos',files:['image'],fileLabel:'Upload Container Photos/Videos'},
+  {k:'s5',l:'Receive Container Photos & Videos',files:[]},
   {k:'s6',l:'Receive Declaration, Packing List & VGM',files:['pdf','doc','excel'],fileLabel:'Upload Declaration & VGM'},
   {k:'s7',l:'Prepare & Send Shipping Order',files:['excel','doc'],fileLabel:'Upload Shipping Order'},
   {k:'s8',l:'Receive Draft BL from Shipping Line',files:['pdf','image'],fileLabel:'Upload Draft BL'},
@@ -796,7 +796,7 @@ function renderOrderCard(o,inDetail=false){
     <div class="prog-label"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${cur}</span><span style="color:var(--amber);font-weight:700">${pct}%</span></div>
     <div style="display:flex;gap:3px;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:8px" id="${ordTabId}">
       <button class="dtab active" onclick="switchOrdTab('${o.id}','steps',this)">Steps</button>
-      <button class="dtab" onclick="switchOrdTab('${o.id}','marks',this)">Marks ${marks.length?badge(marks.length,'b-stone'):''}</button>
+      <button class="dtab" onclick="switchOrdTab('${o.id}','marks',this)">Packing ${packingList.length?badge(packingList.length,'b-stone'):''}</button>
       <button class="dtab" onclick="switchOrdTab('${o.id}','fin',this)">Financials ${rec.length||pay.length?badge((rec.length+pay.length),'b-amber'):''}</button>
     </div>
     <div id="osteps-${o.id}"><div class="steps-list">${stHtml}</div></div>
@@ -1034,12 +1034,13 @@ function renderOrderDetail(o){
     const date=stepDates[s.k]||'';
     const files=stepFiles[s.k]||[];
     const isLastDone=done&&(i===o.current_step-1);
-    const filesHtml=files.map(f=>{
+    const filesHtml=files.map((f,fi)=>{
       const isImg=['jpg','jpeg','png','gif','webp'].includes((f.name||'').split('.').pop().toLowerCase());
       const isVid=['mp4','mov','avi','webm'].includes((f.name||'').split('.').pop().toLowerCase());
-      if(isImg) return`<img src="${esc(f.url)}" onclick="previewFileModal('${esc(f.url)}','${esc(f.name)}','img')" style="width:56px;height:56px;object-fit:cover;border-radius:7px;border:1px solid var(--border);cursor:pointer">`;
-      if(isVid) return`<button class="step-file-item" onclick="previewFileModal('${esc(f.url)}','${esc(f.name)}','video')">${fileIcon(f.name)} ${esc(f.name.length>18?f.name.slice(0,16)+"…":f.name)}</button>`;
-      return`<a class="step-file-item" href="${esc(f.url)}" target="_blank">${fileIcon(f.name)} ${esc(f.name.length>18?f.name.slice(0,16)+"…":f.name)}</a>`;
+      const delBtn=`<button onclick="deleteStepFile('${o.id}','${s.k}',${fi})" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--red);color:#fff;border:none;cursor:pointer;font-size:10px;line-height:1">×</button>`;
+      if(isImg) return`<div style="position:relative;display:inline-block">${delBtn}<img src="${esc(f.url)}" onclick="previewFileModal('${esc(f.url)}','${esc(f.name)}','img')" style="width:56px;height:56px;object-fit:cover;border-radius:7px;border:1px solid var(--border);cursor:pointer"></div>`;
+      if(isVid) return`<span style="position:relative;display:inline-flex;align-items:center">${delBtn}<button class="step-file-item" onclick="previewFileModal('${esc(f.url)}','${esc(f.name)}','video')">${fileIcon(f.name)} ${esc(f.name.length>18?f.name.slice(0,16)+"…":f.name)}</button></span>`;
+      return`<span style="position:relative;display:inline-flex;align-items:center;gap:3px"><a class="step-file-item" href="${esc(f.url)}" target="_blank">${fileIcon(f.name)} ${esc(f.name.length>18?f.name.slice(0,16)+"…":f.name)}</a><button onclick="deleteStepFile('${o.id}','${s.k}',${fi})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:12px;padding:0">×</button></span>`;
     }).join('');
     const uploadHtml=(active||done)&&s.files&&s.files.length?`<label class="file-upload-btn"><input type="file" style="display:none" accept="${getAccept(s.files)}" onchange="uploadStepFileOrd('${o.id}','${s.k}',this)">📎 ${s.fileLabel||'Attach file'}</label>`:'';
     return`<div class="step ${cls}">
@@ -1058,18 +1059,46 @@ function renderOrderDetail(o){
     </div>`;
   }).join('');
 
-  // MARKS HTML
-  const marksHtml=`
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
-      ${marks.map((m,i)=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px">
-        ${esc(m)}<button onclick="removeMarkOrd('${o.id}',${i})" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0;line-height:1">×</button>
-      </div>`).join('')}
+  // PACKING LIST HTML
+  const packingList=o.packing_list||[];
+  const containerMedia=o.container_media||[];
+  const packingHtml=`
+    <div style="margin-bottom:12px">
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              ${['No','Mark','Quarry / Stockyard','Dimensions','Port Weight','Container No','Description'].map(h=>`<th style="padding:6px 8px;text-align:left;font-weight:700;color:var(--text3);border-bottom:1.5px solid var(--border);white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.4px">${h}</th>`).join('')}
+              <th style="padding:6px 8px;border-bottom:1.5px solid var(--border);width:28px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${packingList.length?packingList.map((row,i)=>`
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:5px 8px;font-weight:600;color:var(--text3)">${i+1}</td>
+                ${['mark','quarry','dimensions','port_weight','container_no','description'].map(k=>`
+                  <td style="padding:4px 6px"><input value="${esc(row[k]||'')}" placeholder="—" onchange="updatePackingRow('${o.id}',${i},'${k}',this.value)" style="border:none;background:none;outline:none;font-family:Inter,sans-serif;font-size:12px;width:100%;min-width:60px;color:var(--text);padding:2px 4px;border-radius:4px" onfocus="this.style.background='var(--amber-light)'" onblur="this.style.background='none'"></td>`).join('')}
+                <td style="padding:4px"><button onclick="removePackingRow('${o.id}',${i})" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px">×</button></td>
+              </tr>`).join(''):'<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--text3);font-size:12px">No items — click + to add blocks</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addPackingRow('${o.id}')">+ Add Row</button>
     </div>
-    ${marks.length===0?'<p style="font-size:12px;color:var(--text3);margin-bottom:10px">No marks added yet</p>':''}
-    <div style="display:flex;gap:6px">
-      <input class="fi" id="ord-mark-inp" placeholder="e.g. SM-001, A-23" style="flex:1">
-      <button class="btn btn-secondary btn-sm" onclick="addMarkOrd('${o.id}')">+ Add Mark</button>
-    </div>`;
+    <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Container Photos & Videos</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+      ${containerMedia.map((f,i)=>{
+        const isImg=['jpg','jpeg','png','gif','webp'].includes((f.name||'').split('.').pop().toLowerCase());
+        const isVid=['mp4','mov','avi','webm'].includes((f.name||'').split('.').pop().toLowerCase());
+        let el='';
+        if(isImg) el=`<div style="position:relative"><img src="${esc(f.url)}" onclick="previewFileModal('${esc(f.url)}','${esc(f.name)}','img')" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer"><button onclick="deleteContainerMedia('${o.id}',${i})" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--red);color:#fff;border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center">×</button></div>`;
+        else if(isVid) el=`<div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:2px"><button class="step-file-item" onclick="previewFileModal('${esc(f.url)}','${esc(f.name)}','video')" style="height:72px;width:72px;border-radius:8px;justify-content:center;flex-direction:column">🎥<div style="font-size:9px;margin-top:2px;max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div></button><button onclick="deleteContainerMedia('${o.id}',${i})" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--red);color:#fff;border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center">×</button></div>`;
+        else el=`<div style="display:flex;align-items:center;gap:4px"><a class="step-file-item" href="${esc(f.url)}" target="_blank">${fileIcon(f.name)} ${esc(f.name.length>16?f.name.slice(0,14)+"…":f.name)}</a><button onclick="deleteContainerMedia('${o.id}',${i})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:12px">×</button></div>`;
+        return el;
+      }).join('')}
+    </div>
+    <label class="file-upload-btn"><input type="file" style="display:none" accept="image/*,video/*" multiple onchange="uploadContainerMedia('${o.id}',this)">📎 Upload Photos / Videos</label>`;
 
   // FINANCIALS HTML
   const txRow=(t,i,type)=>{
@@ -1153,14 +1182,14 @@ function renderOrderDetail(o){
       </div>
       <div style="display:flex;gap:3px;margin-top:12px" id="ord-tabs-${o.id}">
         <button class="dtab active" onclick="switchOrdDetailTab('${o.id}','steps',this)">Steps</button>
-        <button class="dtab" onclick="switchOrdDetailTab('${o.id}','marks',this)">Marks ${marks.length?badge(marks.length,'b-stone'):''}</button>
+        <button class="dtab" onclick="switchOrdDetailTab('${o.id}','packing',this)">Packing ${packingList.length?badge(packingList.length,'b-stone'):''}</button>
         <button class="dtab" onclick="switchOrdDetailTab('${o.id}','fin',this)">Financials ${(rec.length||pay.length)?badge(rec.length+pay.length,'b-amber'):''}</button>
       </div>
     </div>
     <div style="padding:16px">
       ${agentHtml}
       <div id="ord-steps-${o.id}"><div class="steps-list">${stHtml}</div></div>
-      <div id="ord-marks-${o.id}" style="display:none">${marksHtml}</div>
+      <div id="ord-packing-${o.id}" style="display:none">${packingHtml}</div>
       <div id="ord-fin-${o.id}" style="display:none">${finHtml}</div>
     </div>`;
 }
@@ -1170,7 +1199,7 @@ function switchOrdDetailTab(ordId,tab,btn){
   if(tabsEl) tabsEl.querySelectorAll('.dtab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById(`ord-steps-${ordId}`).style.display=tab==='steps'?'':'none';
-  document.getElementById(`ord-marks-${ordId}`).style.display=tab==='marks'?'':'none';
+  document.getElementById(`ord-packing-${ordId}`).style.display=tab==='packing'?'':'none';
   document.getElementById(`ord-fin-${ordId}`).style.display=tab==='fin'?'':'none';
 }
 
@@ -1209,19 +1238,57 @@ async function uploadStepFileOrd(orderId,stepKey,input){
     showToast('File uploaded ✓');await selectOrder(orderId);
   }catch(e){showToast('Upload failed: '+e.message);}
 }
-async function addMarkOrd(ordId){
-  const inp=document.getElementById('ord-mark-inp');
-  const val=inp?.value.trim();if(!val){showToast('Enter mark');return;}
-  const {data:ord}=await sb.from('orders').select('stone_marks').eq('id',ordId).single();
-  const marks=[...(ord?.stone_marks||[]),val];
-  await sb.from('orders').update({stone_marks:marks}).eq('id',ordId);
-  showToast('Mark added ✓');await selectOrder(ordId);renderOrdersList();
+// PACKING LIST
+async function addPackingRow(ordId){
+  const {data:ord}=await sb.from('orders').select('packing_list').eq('id',ordId).single();
+  const list=[...(ord?.packing_list||[]),{mark:'',quarry:'',dimensions:'',port_weight:'',container_no:'',description:''}];
+  await sb.from('orders').update({packing_list:list}).eq('id',ordId);
+  await selectOrder(ordId);
 }
-async function removeMarkOrd(ordId,idx){
-  const {data:ord}=await sb.from('orders').select('stone_marks').eq('id',ordId).single();
-  const marks=(ord?.stone_marks||[]).filter((_,i)=>i!==idx);
-  await sb.from('orders').update({stone_marks:marks}).eq('id',ordId);
-  await selectOrder(ordId);renderOrdersList();
+async function removePackingRow(ordId,idx){
+  const {data:ord}=await sb.from('orders').select('packing_list').eq('id',ordId).single();
+  const list=(ord?.packing_list||[]).filter((_,i)=>i!==idx);
+  await sb.from('orders').update({packing_list:list}).eq('id',ordId);
+  await selectOrder(ordId);
+}
+async function updatePackingRow(ordId,idx,field,val){
+  const {data:ord}=await sb.from('orders').select('packing_list').eq('id',ordId).single();
+  const list=[...(ord?.packing_list||[])];
+  if(list[idx]) list[idx]={...list[idx],[field]:val};
+  await sb.from('orders').update({packing_list:list}).eq('id',ordId);
+}
+
+// CONTAINER MEDIA
+async function uploadContainerMedia(ordId,input){
+  const files=Array.from(input.files);
+  if(!files.length) return;
+  showToast('Uploading...');
+  try{
+    const {data:ord}=await sb.from('orders').select('container_media').eq('id',ordId).single();
+    const media=[...(ord?.container_media||[])];
+    for(const file of files){
+      const r=await uploadToR2(file,'orders/'+ordId+'/media');
+      media.push({name:file.name,url:r.url});
+    }
+    await sb.from('orders').update({container_media:media}).eq('id',ordId);
+    showToast('Uploaded ✓');await selectOrder(ordId);
+  }catch(e){showToast('Upload failed');}
+}
+async function deleteContainerMedia(ordId,idx){
+  const {data:ord}=await sb.from('orders').select('container_media').eq('id',ordId).single();
+  const media=(ord?.container_media||[]).filter((_,i)=>i!==idx);
+  await sb.from('orders').update({container_media:media}).eq('id',ordId);
+  await selectOrder(ordId);
+}
+
+// DELETE STEP FILE
+async function deleteStepFile(ordId,stepKey,fileIdx){
+  if(!confirm('Remove this file?')) return;
+  const {data:ord}=await sb.from('orders').select('step_files').eq('id',ordId).single();
+  const sf={...(ord?.step_files||{})};
+  if(sf[stepKey]) sf[stepKey]=sf[stepKey].filter((_,i)=>i!==fileIdx);
+  await sb.from('orders').update({step_files:sf}).eq('id',ordId);
+  showToast('File removed');await selectOrder(ordId);
 }
 function openAddTxOrd(ordId,type){
   openModal(type==='rec'?'Add Receivable':'Add Payable',`
