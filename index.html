@@ -308,6 +308,7 @@ const makeStepsS=(portOfLoad)=>[
   {k:'s8',l:'Receive Draft BL from Shipping Line',files:['pdf','image'],fileLabel:'Upload Draft BL'},
   {k:'draft_send',l:'Send Draft BL to Customer for Confirmation',files:[]},
   {k:'draft_revise',l:'Revisions if needed',files:[]},
+  {k:'confirm_shipping',l:'Confirm Approval to Shipping Line',files:[]},
   {k:'export_docs',l:'Prepare Export Documents (CI, PL, COO)',files:['pdf','doc'],fileLabel:'Upload Export Docs'},
   {k:'balance',l:'Balance Payment',files:['pdf','image','doc'],fileLabel:'Upload Payment Proof'},
   {k:'clearance',l:'Clearance & Send Surrender',files:['pdf','image','doc'],fileLabel:'Upload Clearance Docs'},
@@ -665,6 +666,11 @@ function renderOrderCard(o,inDetail=false){
   const stepFiles=o.step_files||{};
   const stepNotes=o.step_notes||{};
   const stepDates=o.step_dates||{};
+  const marks=o.stone_marks||[];
+  const fin=o.financials||{receivables:[],payables:[]};
+  const rec=fin.receivables||[];
+  const pay=fin.payables||[];
+
   const stHtml=steps.map((s,i)=>{
     const done=i<o.current_step,active=i===o.current_step;
     const cls=done?'done':active?'active':'future';
@@ -695,12 +701,76 @@ function renderOrderCard(o,inDetail=false){
       ${uploadHtml?`<div class="step-files" style="margin-top:5px">${uploadHtml}</div>`:''}
     </div>`;
   }).join('');
+
+  // MARKS
+  const marksHtml=`
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+      ${marks.map((m,i)=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px">
+        ${esc(m)}<button onclick="removeMark('${o.id}',${i},'${inDetail}')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0;line-height:1">×</button>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:6px">
+      <input class="fi" id="mark-inp-${o.id}" placeholder="e.g. SM-001, A-23" style="flex:1">
+      <button class="btn btn-secondary btn-sm" onclick="addMark('${o.id}','${inDetail}')">+ Add Mark</button>
+    </div>`;
+
+  // FINANCIALS
+  const totalRec=rec.reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
+  const totalPay=pay.reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
+  const balance=totalRec-totalPay;
+  const txRow=(t,i,type)=>{
+    const filesHtml2=(t.files||[]).map(f=>`<a class="step-file-item" href="${esc(f.url)}" target="_blank">${fileIcon(f.name)} ${esc(f.name.length>16?f.name.slice(0,14)+'…':f.name)}</a>`).join('');
+    return`<div style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:6px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600">${esc(t.desc)}</div>
+          <div style="font-size:13px;font-weight:700;color:${type==='rec'?'var(--green)':'var(--red)'}">
+            ${type==='rec'?'+':'-'}${t.amount} ${t.currency||'USD'}
+          </div>
+          ${t.date?`<div style="font-size:10px;color:var(--text3)">${t.date}</div>`:''}
+        </div>
+        <button onclick="removeTx('${o.id}','${type}',${i},'${inDetail}')" class="icon-btn">×</button>
+      </div>
+      ${filesHtml2?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">${filesHtml2}</div>`:''}
+      <label class="file-upload-btn" style="margin-top:4px"><input type="file" style="display:none" onchange="uploadTxFile('${o.id}','${type}',${i},this,'${inDetail}')">📎 Attach receipt</label>
+    </div>`;
+  };
+  const finHtml=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+      <div style="background:var(--green-light);border:1px solid var(--green-border);border-radius:10px;padding:8px 10px;text-align:center">
+        <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;margin-bottom:2px">Received</div>
+        <div style="font-size:15px;font-weight:800;color:var(--green)">+${totalRec.toFixed(0)}</div>
+      </div>
+      <div style="background:var(--red-light);border:1px solid var(--red-border);border-radius:10px;padding:8px 10px;text-align:center">
+        <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:2px">Paid Out</div>
+        <div style="font-size:15px;font-weight:800;color:var(--red)">-${totalPay.toFixed(0)}</div>
+      </div>
+      <div style="background:${balance>=0?'var(--teal-light)':'var(--red-light)'};border:1px solid ${balance>=0?'var(--teal-border)':'var(--red-border)'};border-radius:10px;padding:8px 10px;text-align:center">
+        <div style="font-size:10px;font-weight:700;color:${balance>=0?'var(--teal)':'var(--red)'};text-transform:uppercase;margin-bottom:2px">Balance</div>
+        <div style="font-size:15px;font-weight:800;color:${balance>=0?'var(--teal)':'var(--red)'}">${balance>=0?'+':''}${balance.toFixed(0)}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;margin-bottom:6px">📥 Receivables</div>
+        ${rec.map((t,i)=>txRow(t,i,'rec')).join('')}
+        <button class="btn-dashed" style="margin-bottom:0;padding:7px" onclick="openAddTx('${o.id}','rec','${inDetail}')">+ Add</button>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;margin-bottom:6px">📤 Payables</div>
+        ${pay.map((t,i)=>txRow(t,i,'pay')).join('')}
+        <button class="btn-dashed" style="margin-bottom:0;padding:7px" onclick="openAddTx('${o.id}','pay','${inDetail}')">+ Add</button>
+      </div>
+    </div>`;
+
   const agentHtml=(o.shipping_agent_name||o.customs_agent_name)?`
     <div class="agent-box">
       <div class="agent-title">Agents</div>
-      ${o.shipping_agent_name?`<div style="margin-bottom:4px"><b>Shipping:</b> ${esc(o.shipping_agent_name)}${o.shipping_agent_phone?' · 📞 '+esc(o.shipping_agent_phone):''}${o.shipping_agent_email?' · ✉️ '+esc(o.shipping_agent_email):''}</div>`:''}
+      ${o.shipping_agent_name?`<div style="margin-bottom:3px"><b>Shipping:</b> ${esc(o.shipping_agent_name)}${o.shipping_agent_phone?' · 📞 '+esc(o.shipping_agent_phone):''}${o.shipping_agent_email?' · ✉️ '+esc(o.shipping_agent_email):''}</div>`:''}
       ${o.customs_agent_name?`<div><b>Customs:</b> ${esc(o.customs_agent_name)}${o.customs_agent_phone?' · 📞 '+esc(o.customs_agent_phone):''}${o.customs_agent_email?' · ✉️ '+esc(o.customs_agent_email):''}</div>`:''}
     </div>`:'';
+
+  const ordTabId=`otab-${o.id}`;
   return`<div class="ord-card">
     <div class="ord-head">
       <div style="flex:1;min-width:0"><div class="ord-title">${esc(o.stone)}</div>
@@ -719,10 +789,97 @@ function renderOrderCard(o,inDetail=false){
     ${agentHtml}
     <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
     <div class="prog-label"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${cur}</span><span style="color:var(--amber);font-weight:700">${pct}%</span></div>
-    <div class="steps-list">${stHtml}</div>
+    <div style="display:flex;gap:3px;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:8px" id="${ordTabId}">
+      <button class="dtab active" onclick="switchOrdTab('${o.id}','steps',this)">Steps</button>
+      <button class="dtab" onclick="switchOrdTab('${o.id}','marks',this)">Marks ${marks.length?badge(marks.length,'b-stone'):''}</button>
+      <button class="dtab" onclick="switchOrdTab('${o.id}','fin',this)">Financials ${rec.length||pay.length?badge((rec.length+pay.length),'b-amber'):''}</button>
+    </div>
+    <div id="osteps-${o.id}"><div class="steps-list">${stHtml}</div></div>
+    <div id="omarks-${o.id}" style="display:none">${marksHtml}</div>
+    <div id="ofin-${o.id}" style="display:none">${finHtml}</div>
   </div>`;
 }
 
+function switchOrdTab(ordId,tab,btn){
+  const tabs=btn.closest('[id^="otab-"]');
+  tabs.querySelectorAll('.dtab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`osteps-${ordId}`).style.display=tab==='steps'?'':'none';
+  document.getElementById(`omarks-${ordId}`).style.display=tab==='marks'?'':'none';
+  document.getElementById(`ofin-${ordId}`).style.display=tab==='fin'?'':'none';
+}
+
+async function addMark(ordId,inDetail){
+  const inp=document.getElementById(`mark-inp-${ordId}`);
+  const val=inp.value.trim();if(!val){showToast('Enter mark');return;}
+  const {data:ord}=await sb.from('orders').select('stone_marks').eq('id',ordId).single();
+  const marks=[...(ord?.stone_marks||[]),val];
+  await sb.from('orders').update({stone_marks:marks}).eq('id',ordId);
+  inp.value='';showToast('Mark added ✓');
+  if(inDetail==='true') renderDetail(); else renderAllOrders();
+}
+async function removeMark(ordId,idx,inDetail){
+  const {data:ord}=await sb.from('orders').select('stone_marks').eq('id',ordId).single();
+  const marks=(ord?.stone_marks||[]).filter((_,i)=>i!==idx);
+  await sb.from('orders').update({stone_marks:marks}).eq('id',ordId);
+  if(inDetail==='true') renderDetail(); else renderAllOrders();
+}
+
+function openAddTx(ordId,type,inDetail){
+  openModal(type==='rec'?'Add Receivable':'Add Payable',`
+    <div class="fg"><label class="fl">Description <span class="required-mark">*</span></label>
+      <input class="fi" id="tx-desc" placeholder="${type==='rec'?'e.g. Advance Payment, Balance Payment':'e.g. Quarry payment, Freight, Customs fee'}">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px">
+      <div class="fg"><label class="fl">Amount <span class="required-mark">*</span></label><input type="number" class="fi" id="tx-amount" placeholder="0"></div>
+      <div class="fg"><label class="fl">Currency</label><select class="fsel" id="tx-currency" style="width:auto"><option value="USD" selected>USD</option><option value="EUR">EUR</option><option value="CNY">CNY</option><option value="TRY">TRY</option><option value="IRR">IRR</option></select></div>
+    </div>
+    <div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="tx-date"></div>
+    <div class="fg"><label class="fl">Notes</label><input class="fi" id="tx-notes" placeholder="Optional notes"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveTx('${ordId}','${type}','${inDetail}')">Save</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`);
+}
+
+async function saveTx(ordId,type,inDetail){
+  const desc=document.getElementById('tx-desc').value.trim();
+  const amount=document.getElementById('tx-amount').value;
+  if(!desc||!amount){showToast('Fill required fields');return;}
+  const dateVal=document.getElementById('tx-date').value;
+  const tx={desc,amount:parseFloat(amount),currency:document.getElementById('tx-currency').value,date:dateVal?new Date(dateVal).toLocaleDateString('en-GB'):'',notes:document.getElementById('tx-notes').value.trim(),files:[]};
+  const {data:ord}=await sb.from('orders').select('financials').eq('id',ordId).single();
+  const fin=ord?.financials||{receivables:[],payables:[]};
+  if(type==='rec') fin.receivables=[...(fin.receivables||[]),tx];
+  else fin.payables=[...(fin.payables||[]),tx];
+  await sb.from('orders').update({financials:fin}).eq('id',ordId);
+  closeModal();showToast('Saved ✓');
+  if(inDetail==='true') renderDetail(); else renderAllOrders();
+}
+
+async function removeTx(ordId,type,idx,inDetail){
+  const {data:ord}=await sb.from('orders').select('financials').eq('id',ordId).single();
+  const fin=ord?.financials||{receivables:[],payables:[]};
+  if(type==='rec') fin.receivables=(fin.receivables||[]).filter((_,i)=>i!==idx);
+  else fin.payables=(fin.payables||[]).filter((_,i)=>i!==idx);
+  await sb.from('orders').update({financials:fin}).eq('id',ordId);
+  if(inDetail==='true') renderDetail(); else renderAllOrders();
+}
+
+async function uploadTxFile(ordId,type,idx,input,inDetail){
+  const file=input.files[0];if(!file)return;
+  showToast('Uploading...');
+  try{
+    const r=await uploadToR2(file,`orders/${ordId}/fin`);
+    const {data:ord}=await sb.from('orders').select('financials').eq('id',ordId).single();
+    const fin=ord?.financials||{receivables:[],payables:[]};
+    const arr=type==='rec'?fin.receivables:fin.payables;
+    if(arr[idx]) arr[idx].files=[...(arr[idx].files||[]),{name:file.name,url:r.url}];
+    await sb.from('orders').update({financials:fin}).eq('id',ordId);
+    showToast('File attached ✓');
+    if(inDetail==='true') renderDetail(); else renderAllOrders();
+  }catch(e){showToast('Upload failed');}
+}
 function getAccept(types){
   const map={pdf:'.pdf',doc:'.doc,.docx',excel:'.xlsx,.xls,.csv',image:'image/*'};
   return types.map(t=>map[t]||'').filter(Boolean).join(',');
