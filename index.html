@@ -226,6 +226,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:12px 0}
       <div class="ctable-toolbar">
         <div class="search-box"><span style="color:var(--text3)">🔍</span><input type="text" placeholder="Search customers..." id="search-inp" oninput="renderTable()"></div>
         <select class="fsel-sm" id="co-filter" onchange="coFilterChanged(this.value)" style="display:none"><option value="">All Companies</option></select>
+        <input class="fsel-sm" id="country-filter" placeholder="🌍 Country..." oninput="renderTable()" style="width:120px">
         <select class="fsel-sm" id="cat-filter" onchange="renderTable()">
           <option value="">All Categories</option>
           <option>Marble</option><option>Travertine</option><option>Granite</option><option>Onyx</option>
@@ -419,6 +420,8 @@ function coFilterChanged(val){companyFilter=val;loadCustomers()}
 
 // CUSTOMERS
 let wishlistCounts={};
+let sortCol='';
+let sortDir=1;
 async function loadCustomers(){
   document.getElementById('ctable-wrap').innerHTML='<div class="loader"><div class="spin"></div> Loading...</div>';
   let q=sb.from('customers').select('*');
@@ -443,19 +446,38 @@ function sortCustomers(list){
   const rest=list.filter(c=>!c.priority||c.priority==='low'||c.priority==='none').sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at));
   return[...priority,...medium,...rest];
 }
+function sortTable(col){
+  if(sortCol===col) sortDir*=-1;
+  else{sortCol=col;sortDir=1;}
+  renderTable();
+}
 function renderTable(){
   const hasMultipleCompanies=new Set(customers.map(c=>c.company_id)).size>1;
   const q=document.getElementById('search-inp').value.trim().toLowerCase();
+  const countryQ=(document.getElementById('country-filter')?.value||'').trim().toLowerCase();
   const cat=document.getElementById('cat-filter').value;
   const filterPri=document.getElementById('follow-filter').value;
   const followOnly=filterPri==='follow'||filterPri==='high';
   const retFilter=document.getElementById('returning-filter')?.value||'';
-  let list=customers.filter(c=>{
+  let sorted=[...customers];
+  if(sortCol){
+    sorted.sort((a,b)=>{
+      let va='',vb='';
+      if(sortCol==='Customer'){va=a.name||'';vb=b.name||'';}
+      else if(sortCol==='Country'){va=a.country||'';vb=b.country||'';}
+      else if(sortCol==='Max Price'){va=parseFloat(a.interests?.price_range?.max)||0;vb=parseFloat(b.interests?.price_range?.max)||0;return(va-vb)*sortDir;}
+      else if(sortCol==='Updated'){va=a.updated_at||a.created_at||'';vb=b.updated_at||b.created_at||'';}
+      else if(sortCol==='⭐'){va=wishlistCounts[a.id]||0;vb=wishlistCounts[b.id]||0;return(va-vb)*sortDir;}
+      return va.localeCompare(vb)*sortDir;
+    });
+  } else sorted=customers;
+  let list=sorted.filter(c=>{
     const ms=!q||c.name.toLowerCase().includes(q)||(c.contact_value||'').toLowerCase().includes(q);
+    const mco=!countryQ||(c.country||'').toLowerCase().includes(countryQ);
     const mc=!cat||(c.interests?.categories||[]).includes(cat);
     const mf=!filterPri||(filterPri==='follow'?(c.priority==='high'||c.priority==='medium'):c.priority===filterPri);
     const mr=!retFilter||c.is_returning;
-    return ms&&mc&&mf&&mr;
+    return ms&&mc&&mf&&mr&&mco;
   });
   const el=document.getElementById('ctable-wrap');
   if(!list.length){el.innerHTML='<div class="empty"><div class="eicon">🪨</div><p>No customers found</p></div>';return;}
@@ -463,9 +485,18 @@ function renderTable(){
   const fm=list.filter(c=>c.priority==='medium').length;
   el.innerHTML=`<div style="padding:6px 14px;font-size:11px;color:var(--text3);border-bottom:1px solid var(--border);background:var(--surface2)">${list.length} customers${fc?` · <span style="color:var(--red);font-weight:600">🔵 ${fc} high</span>`:''}${fm?` · <span style="color:var(--orange);font-weight:600">🟢 ${fm} medium</span>`:''}</div>
   <table class="ctable"><thead><tr>
-    <th>#</th><th>Customer</th><th>Categories</th><th>Product</th><th>Max Price</th><th>Channel</th>
+    <th>#</th>
+    <th style="cursor:pointer;user-select:none" onclick="sortTable('Customer')">Customer ${sortCol==='Customer'?(sortDir===1?'↑':'↓'):''}</th>
+    <th style="cursor:pointer;user-select:none" onclick="sortTable('Country')">Country ${sortCol==='Country'?(sortDir===1?'↑':'↓'):''}</th>
+    <th>Categories</th>
+    <th>Product</th>
+    <th style="cursor:pointer;user-select:none" onclick="sortTable('Max Price')">Max Price ${sortCol==='Max Price'?(sortDir===1?'↑':'↓'):''}</th>
+    <th>Channel</th>
     ${isAdmin()&&!companyFilter&&hasMultipleCompanies?'<th>Company</th>':''}
-    <th style="text-align:center">⭐</th><th style="text-align:center">🔁</th><th>Updated</th><th></th>
+    <th style="cursor:pointer;user-select:none;text-align:center" onclick="sortTable('⭐')">⭐ ${sortCol==='⭐'?(sortDir===1?'↑':'↓'):''}</th>
+    <th style="text-align:center">🔁</th>
+    <th style="cursor:pointer;user-select:none" onclick="sortTable('Updated')">Updated ${sortCol==='Updated'?(sortDir===1?'↑':'↓'):''}</th>
+    <th></th>
   </tr></thead><tbody>
   ${list.map((c,i)=>{
     const ch=CH_CONFIG[c.preferred_channel]||CH_CONFIG.whatsapp;
@@ -477,6 +508,7 @@ function renderTable(){
     return`<tr class="data-row${c.priority==='high'?' priority-high':c.priority==='medium'?' priority-medium':c.priority==='low'?' priority-low':''}${c.id===selectedId?' sel-row':''}" onclick="selectCustomer('${c.id}')">
       <td class="row-num">${i+1}</td>
       <td><div style="font-weight:600;display:flex;align-items:center;gap:5px">${c.priority==='high'?'🔵':c.priority==='medium'?'🟢':c.priority==='low'?'🟡':''} ${esc(c.name)}</div></td>
+      <td style="font-size:12px;color:var(--text2)">${esc(c.country||'')}${c.city?`<span style="color:var(--text3)"> · ${esc(c.city)}</span>`:''}</td>
       <td><div style="display:flex;flex-wrap:wrap;gap:3px">${cats}</div></td>
       <td><div style="display:flex;flex-wrap:wrap;gap:3px">${pts}</div></td>
       <td style="font-size:12px;white-space:nowrap;color:var(--text2)">${esc(prStr)}</td>
@@ -648,7 +680,7 @@ let _wishImgData=null;
 function renderWishlist(c,items){
   const list=items.length?items.map(item=>{
     const ws=WISH_STATUS[item.wish_status||'liked'];
-    const prStr=item.price_amount?`${item.price_amount} ${item.price_currency||'USD'}/${item.price_unit||'ton'} ${item.price_term||'CNF'}${item.price_destination?' — '+item.price_destination:''}`:'';
+    const prStr=(item.price_amount!=null&&item.price_amount!=='')?`${item.price_amount} ${item.price_currency||'USD'}/${item.price_unit||'ton'} ${item.price_term||'CNF'}${item.price_destination?' — '+item.price_destination:''}`:'NO PRICE SET';
     const sc=companies.find(x=>x.id===item.supplier_company_id);
     return`<div class="wish-item">
       <div style="display:flex;gap:10px">
@@ -669,7 +701,7 @@ function renderWishlist(c,items){
             </div>
           </div>
           ${sc?`<div style="font-size:11px;margin-bottom:3px">${sc.country==='TR'?'🇹🇷':'🇮🇷'} <span style="color:var(--text3)">${esc(sc.name)}</span></div>`:''}
-          ${prStr?`<div style="font-size:12px;color:var(--amber);font-weight:700;margin-bottom:3px">💰 ${esc(prStr)}</div>`:''}
+          <div style="font-size:12px;font-weight:700;margin-bottom:3px;color:${prStr==='NO PRICE SET'?'var(--text3)':'var(--amber)'}">💰 ${esc(prStr)}</div>
           ${item.min_dimension?`<div style="font-size:11px;color:var(--text2);margin-bottom:3px">📐 Min: <b>${esc(item.min_dimension)}</b></div>`:''}
           ${item.notes?`<div style="font-size:12px;color:var(--text2);background:var(--surface2);border-radius:7px;padding:5px 8px;margin-bottom:4px;line-height:1.5">${esc(item.notes)}</div>`:''}
           <div style="margin-top:2px">${badge(ws.label,ws.cls)}</div>
@@ -713,7 +745,7 @@ async function addWishItem(customerId,companyId){
     }catch(e){showToast('Image upload failed');return;}
   }
   const supplierCompanyId=document.getElementById('w-supplier')?.value||companyId;
-  await sb.from('wishlists').insert({customer_id:customerId,company_id:companyId,supplier_company_id:supplierCompanyId,stone,wish_status:'liked',image_data:imageData||null,price_amount:document.getElementById('w-price').value||null,price_currency:document.getElementById('w-currency').value,price_term:document.getElementById('w-term').value,price_unit:document.getElementById('w-unit').value,price_destination:document.getElementById('w-dest').value.trim(),min_dimension:document.getElementById('w-min-dim').value.trim(),notes:document.getElementById('w-notes').value.trim()});
+  await sb.from('wishlists').insert({customer_id:customerId,company_id:companyId,supplier_company_id:supplierCompanyId,stone,wish_status:'liked',image_data:imageData||null,price_amount:parseFloat(document.getElementById('w-price').value)||null,price_currency:document.getElementById('w-currency').value,price_term:document.getElementById('w-term').value,price_unit:document.getElementById('w-unit').value,price_destination:document.getElementById('w-dest').value.trim(),min_dimension:document.getElementById('w-min-dim').value.trim(),notes:document.getElementById('w-notes').value.trim()});
   _wishImgData=null;showToast('Added ✓');if(wishlistCounts)wishlistCounts[customerId]=(wishlistCounts[customerId]||0)+1;renderTable();renderDetail();
 }
 async function updateWishStatus(id,val){await sb.from('wishlists').update({wish_status:val}).eq('id',id);renderDetail()}
@@ -1454,10 +1486,10 @@ function closeModal(){document.getElementById('overlay').classList.add('hidden')
 function closeBg(e){if(e.target===document.getElementById('overlay'))closeModal()}
 
 // CUSTOMER FORM
-function channelFieldHtml(ch){
+function channelFieldHtml(ch,val=''){
   const cfg=CH_CONFIG[ch]||CH_CONFIG.whatsapp;
   return`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px;margin-top:7px">
-    <label class="fl">${cfg.field}</label><input class="fi" id="fc-contact-val" placeholder="${cfg.placeholder}">
+    <label class="fl">${cfg.field}</label><input class="fi" id="fc-contact-val" placeholder="${cfg.placeholder}" value="${val.replace(/"/g,'&quot;')}">
   </div>`;
 }
 function customerFormHtml(c={}){
@@ -1467,13 +1499,17 @@ function customerFormHtml(c={}){
   const ptChips=PROD_TYPES.map(t=>`<button type="button" class="chip${(c.product_types||[]).includes(t)?' ca':''}" onclick="toggleProdType(this)" data-pt="${t}">${t}</button>`).join('');
   const pr=c.interests?.price_range||{};
   return`
-    <div class="fg"><label class="fl">Company / Customer Name</label><input class="fi" id="fc-name" value="${esc(c.name||'')}"></div>
+    <div class="fgrid">
+      <div class="fg full"><label class="fl">Company / Customer Name</label><input class="fi" id="fc-name" value="${esc(c.name||'')}"></div>
+      <div class="fg"><label class="fl">Country</label><input class="fi" id="fc-country" placeholder="e.g. China, Turkey, Italy" value="${esc(c.country||'')}"></div>
+      <div class="fg"><label class="fl">City</label><input class="fi" id="fc-city" placeholder="e.g. Shanghai" value="${esc(c.city||'')}"></div>
+    </div>
     <div class="fg"><label class="fl">Preferred Communication Channel</label>
       <div class="radio-group" id="ch-group">${chHtml}</div>
-      <div id="ch-field-wrap">${channelFieldHtml(selCh)}</div>
+      <div id="ch-field-wrap">${channelFieldHtml(selCh,c.contact_value||'')}</div>
     </div>
     <input type="hidden" id="fc-ch" value="${selCh}">
-    <script>setTimeout(()=>{const v=document.getElementById('fc-contact-val');if(v)v.value='${esc(c.contact_value||'')}';},0);<\/script>
+    <input type="hidden" id="fc-contact-init" value="${esc(c.contact_value||'')}">
     <div class="fg"><label class="fl">Send when introducing a new product</label>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         <label class="check-row"><input type="checkbox" id="fc-price"${c.send_price?' checked':''}> Price</label>
@@ -1500,7 +1536,15 @@ function customerFormHtml(c={}){
     <div class="fg"><label class="fl">Notes</label><textarea class="fta" id="fc-notes">${esc(c.interests?.notes||'')}</textarea></div>
     <div class="btn-row"><button class="btn btn-primary" onclick="saveCustomerForm('${c.id||''}')">Save</button><button class="btn btn-secondary" onclick="closeModal()">Cancel</button></div>`;
 }
-function selectChannel(ch){document.querySelectorAll('#ch-group .radio-chip').forEach(el=>el.classList.remove('active'));document.querySelector(`#ch-group [data-ch="${ch}"]`).classList.add('active');document.getElementById('fc-ch').value=ch;document.getElementById('ch-field-wrap').innerHTML=channelFieldHtml(ch);}
+function selectChannel(ch){
+  document.querySelectorAll('#ch-group .radio-chip').forEach(el=>el.classList.remove('active'));
+  document.querySelector('#ch-group [data-ch="'+ch+'"]').classList.add('active');
+  document.getElementById('fc-ch').value=ch;
+  document.getElementById('ch-field-wrap').innerHTML=channelFieldHtml(ch);
+  const init=document.getElementById('fc-contact-init')?.value||'';
+  const inp=document.getElementById('fc-contact-val');
+  if(inp&&init) inp.value=init;
+}
 function toggleProdType(el){el.classList.toggle('ca');const active=[...document.querySelectorAll('#chips-pt .chip.ca')].map(e=>e.dataset.pt);document.getElementById('dim-block').style.display=active.includes('Block')?'':'none';document.getElementById('dim-slab').style.display=active.includes('Slab')?'':'none';document.getElementById('dim-cut').style.display=active.includes('Cut to Size')?'':'none';}
 function openAddCustomer(){openModal('New Customer',customerFormHtml())}
 function openEditCustomer(id){const c=customers.find(x=>x.id===id);openModal('Edit Customer',customerFormHtml(c))}
@@ -1513,7 +1557,7 @@ async function saveCustomerForm(id){
   // Keep existing company_id or use Samin Marble as default
   const existingC=id?customers.find(x=>x.id===id):null;
   const coId=existingC?.company_id||SAMIN_MARBLE_ID;
-  const obj={name,company_id:coId,preferred_channel:ch,contact_value:contactVal,contact:contactVal,
+  const obj={name,company_id:coId,country:document.getElementById('fc-country')?.value.trim()||'',city:document.getElementById('fc-city')?.value.trim()||'',preferred_channel:ch,contact_value:contactVal,contact:contactVal,
     send_price:document.getElementById('fc-price').checked,send_dimensions:document.getElementById('fc-dims').checked,send_slab_photo:document.getElementById('fc-slab').checked,
     product_types:pts,block_min_dim:document.getElementById('fc-block-dim')?.value.trim()||'',slab_min_dim:document.getElementById('fc-slab-dim')?.value.trim()||'',cut_dimensions:document.getElementById('fc-cut-dim')?.value.trim()||'',
     interests:{categories:cats,price_range:{max:document.getElementById('fc-pmax').value,currency:document.getElementById('fc-currency').value,term:document.getElementById('fc-term').value,unit:document.getElementById('fc-unit').value,destination:document.getElementById('fc-dest').value.trim()},notes:document.getElementById('fc-notes').value.trim()}};
