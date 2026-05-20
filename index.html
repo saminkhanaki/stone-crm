@@ -57,8 +57,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .ctable td{padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
 .ctable tr.data-row{cursor:pointer;transition:background .12s}
 .ctable tr.data-row:hover td{background:#f5f0ea}
-.ctable tr.follow-row td{background:var(--orange-light)}
-.ctable tr.follow-row:hover td{background:#ffe0a0}
+.ctable tr.priority-high td{background:var(--blue-light);border-left:3px solid var(--blue)}
+.ctable tr.priority-high:hover td{background:#cce4f7}
+.ctable tr.priority-medium td{background:var(--green-light);border-left:3px solid var(--green)}
+.ctable tr.priority-medium:hover td{background:#c8eedd}
+.ctable tr.priority-low td{background:var(--amber-light);border-left:3px solid var(--amber)}
+.ctable tr.priority-low:hover td{background:#fde8a0}
 .ctable tr.sel-row td{background:var(--teal-light)!important}
 .follow-indicator{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--orange)}
 .follow-dot{width:7px;height:7px;border-radius:50%;background:var(--orange);animation:blink 1.5s infinite;flex-shrink:0}
@@ -227,7 +231,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:12px 0}
           <option>Marble</option><option>Travertine</option><option>Granite</option><option>Onyx</option>
           <option>Traonyx</option><option>Marbonyx</option><option>Limestone</option><option>Basalt</option><option>Quartzite</option><option>Sandstone</option>
         </select>
-        <select class="fsel-sm" id="follow-filter" onchange="renderTable()"><option value="">All</option><option value="follow">🔔 Follow-up</option></select>
+        <select class="fsel-sm" id="follow-filter" onchange="renderTable()"><option value="">All Priorities</option><option value="follow">🔴🟡 High & Medium</option><option value="high">🔵 High Only</option></select>
         <button class="btn-new" onclick="openAddCustomer()">+ New Customer</button>
       </div>
       <div class="tab-content-layout">
@@ -413,6 +417,7 @@ function switchTab(tab,btn){
 function coFilterChanged(val){companyFilter=val;loadCustomers()}
 
 // CUSTOMERS
+let wishlistCounts={};
 async function loadCustomers(){
   document.getElementById('ctable-wrap').innerHTML='<div class="loader"><div class="spin"></div> Loading...</div>';
   let q=sb.from('customers').select('*');
@@ -420,31 +425,44 @@ async function loadCustomers(){
   else if(companyFilter) q=q.eq('company_id',companyFilter);
   const {data,error}=await q;
   if(error){showToast('Error loading');return;}
-  customers=sortCustomers(data||[]);renderTable();
+  customers=sortCustomers(data||[]);
+  // load wishlist counts
+  const ids=(data||[]).map(c=>c.id);
+  if(ids.length){
+    const {data:wl}=await sb.from('wishlists').select('customer_id').in('customer_id',ids);
+    wishlistCounts={};
+    (wl||[]).forEach(w=>{wishlistCounts[w.customer_id]=(wishlistCounts[w.customer_id]||0)+1;});
+  }
+  renderTable();
 }
+const PRIORITY_ORDER={high:0,medium:1,low:2,null:3,undefined:3};
 function sortCustomers(list){
-  const follow=list.filter(c=>c.follow_up).sort((a,b)=>new Date(a.updated_at||a.created_at)-new Date(b.updated_at||b.created_at));
-  const rest=list.filter(c=>!c.follow_up).sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at));
-  return[...follow,...rest];
+  const priority=list.filter(c=>c.priority==='high').sort((a,b)=>new Date(a.updated_at||a.created_at)-new Date(b.updated_at||b.created_at));
+  const medium=list.filter(c=>c.priority==='medium').sort((a,b)=>new Date(a.updated_at||a.created_at)-new Date(b.updated_at||b.created_at));
+  const rest=list.filter(c=>!c.priority||c.priority==='low'||c.priority==='none').sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at));
+  return[...priority,...medium,...rest];
 }
 function renderTable(){
   const hasMultipleCompanies=new Set(customers.map(c=>c.company_id)).size>1;
   const q=document.getElementById('search-inp').value.trim().toLowerCase();
   const cat=document.getElementById('cat-filter').value;
-  const followOnly=document.getElementById('follow-filter').value==='follow';
+  const filterPri=document.getElementById('follow-filter').value;
+  const followOnly=filterPri==='follow'||filterPri==='high';
   let list=customers.filter(c=>{
     const ms=!q||c.name.toLowerCase().includes(q)||(c.contact_value||'').toLowerCase().includes(q);
     const mc=!cat||(c.interests?.categories||[]).includes(cat);
-    return ms&&mc&&(!followOnly||c.follow_up);
+    const mf=!filterPri||(filterPri==='follow'?(c.priority==='high'||c.priority==='medium'):c.priority===filterPri);
+    return ms&&mc&&mf;
   });
   const el=document.getElementById('ctable-wrap');
   if(!list.length){el.innerHTML='<div class="empty"><div class="eicon">🪨</div><p>No customers found</p></div>';return;}
-  const fc=list.filter(c=>c.follow_up).length;
-  el.innerHTML=`<div style="padding:6px 14px;font-size:11px;color:var(--text3);border-bottom:1px solid var(--border);background:var(--surface2)">${list.length} customers${fc?` · <span style="color:var(--orange);font-weight:600">🔔 ${fc} follow-up</span>`:''}</div>
+  const fc=list.filter(c=>c.priority==='high').length;
+  const fm=list.filter(c=>c.priority==='medium').length;
+  el.innerHTML=`<div style="padding:6px 14px;font-size:11px;color:var(--text3);border-bottom:1px solid var(--border);background:var(--surface2)">${list.length} customers${fc?` · <span style="color:var(--red);font-weight:600">🔵 ${fc} high</span>`:''}${fm?` · <span style="color:var(--orange);font-weight:600">🟢 ${fm} medium</span>`:''}</div>
   <table class="ctable"><thead><tr>
     <th>#</th><th>Customer</th><th>Categories</th><th>Product</th><th>Max Price</th><th>Channel</th>
     ${isAdmin()&&!companyFilter&&hasMultipleCompanies?'<th>Company</th>':''}
-    <th>Updated</th><th></th>
+    <th style="text-align:center">⭐</th><th>Updated</th><th></th>
   </tr></thead><tbody>
   ${list.map((c,i)=>{
     const ch=CH_CONFIG[c.preferred_channel]||CH_CONFIG.whatsapp;
@@ -453,16 +471,17 @@ function renderTable(){
     const pr=c.interests?.price_range||{};
     const prStr=pr.max?`${pr.max} ${pr.currency||'USD'}/${pr.unit||'ton'} ${pr.term||'CNF'}${pr.destination?' · '+pr.destination:''}`:'—';
     const co=companies.find(x=>x.id===c.company_id);
-    return`<tr class="data-row${c.follow_up?' follow-row':''}${c.id===selectedId?' sel-row':''}" onclick="selectCustomer('${c.id}')">
+    return`<tr class="data-row${c.priority==='high'?' priority-high':c.priority==='medium'?' priority-medium':c.priority==='low'?' priority-low':''}${c.id===selectedId?' sel-row':''}" onclick="selectCustomer('${c.id}')">
       <td class="row-num">${i+1}</td>
-      <td><div style="font-weight:600">${c.follow_up?'🔔 ':''}${esc(c.name)}</div></td>
+      <td><div style="font-weight:600;display:flex;align-items:center;gap:5px">${c.priority==='high'?'🔵':c.priority==='medium'?'🟢':c.priority==='low'?'🟡':''} ${esc(c.name)}</div></td>
       <td><div style="display:flex;flex-wrap:wrap;gap:3px">${cats}</div></td>
       <td><div style="display:flex;flex-wrap:wrap;gap:3px">${pts}</div></td>
       <td style="font-size:12px;white-space:nowrap;color:var(--text2)">${esc(prStr)}</td>
       <td style="font-size:12px">${ch.icon} ${ch.label}</td>
       ${isAdmin()&&!companyFilter&&hasMultipleCompanies?`<td>${co?badge(co.name,co.country==='TR'?'b-tr':'b-ir'):''}</td>`:''}
+      <td style="text-align:center">${wishlistCounts[c.id]?`<span style="background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700">${wishlistCounts[c.id]}</span>`:''}</td>
       <td style="font-size:11px;color:var(--text3)">${fmtDate(c.updated_at||c.created_at)}</td>
-      <td>${c.follow_up?`<span class="follow-indicator"><span class="follow-dot"></span>Follow</span>`:''}</td>
+      <td>${c.priority==='high'?badge('High','b-blue'):c.priority==='medium'?badge('Medium','b-green'):c.priority==='low'?badge('Low','b-amber'):''}</td>
     </tr>`;
   }).join('')}
   </tbody></table>`;
@@ -496,7 +515,12 @@ async function renderDetail(){
           </div>
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0">
-          <button class="follow-toggle ${c.follow_up?'on':'off'}" onclick="toggleFollow('${c.id}',${c.follow_up})">${c.follow_up?'🔔 Following':'🔔'}</button>
+          <select style="border:1.5px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-family:Inter,sans-serif;cursor:pointer;outline:none;background:var(--surface)" onchange="setPriority('${c.id}',this.value)">
+            <option value="" ${!c.priority||c.priority===''?'selected':''}>— Priority</option>
+            <option value="high" ${c.priority==='high'?'selected':''}>🔵 High</option>
+            <option value="medium" ${c.priority==='medium'?'selected':''}>🟢 Medium</option>
+            <option value="low" ${c.priority==='low'?'selected':''}>🟡 Low</option>
+          </select>
           <button class="btn btn-secondary btn-sm" onclick="openEditCustomer('${c.id}')">Edit</button>
           <button class="btn btn-secondary btn-sm" onclick="closeDetail()">×</button>
         </div>
@@ -508,10 +532,10 @@ async function renderDetail(){
 function closeDetail(){selectedId=null;document.getElementById('detail-panel').classList.remove('open');renderTable()}
 function setDTab(t){detailTab=t;renderDetail()}
 
-async function toggleFollow(id,current){
-  await sb.from('customers').update({follow_up:!current,updated_at:new Date().toISOString()}).eq('id',id);
-  customers=sortCustomers(customers.map(c=>c.id===id?{...c,follow_up:!current,updated_at:new Date().toISOString()}:c));
-  renderTable();renderDetail();showToast(current?'Follow-up removed':'Following! 🔔');
+async function setPriority(id,priority){
+  await sb.from('customers').update({priority,updated_at:new Date().toISOString()}).eq('id',id);
+  customers=sortCustomers(customers.map(c=>c.id===id?{...c,priority,updated_at:new Date().toISOString()}:c));
+  renderTable();renderDetail();showToast('Priority updated ✓');
 }
 
 // PROFILE
@@ -664,10 +688,10 @@ async function addWishItem(customerId,companyId){
   }
   const supplierCompanyId=document.getElementById('w-supplier')?.value||companyId;
   await sb.from('wishlists').insert({customer_id:customerId,company_id:companyId,supplier_company_id:supplierCompanyId,stone,wish_status:'liked',image_data:imageData||null,price_amount:document.getElementById('w-price').value||null,price_currency:document.getElementById('w-currency').value,price_term:document.getElementById('w-term').value,price_unit:document.getElementById('w-unit').value,price_destination:document.getElementById('w-dest').value.trim(),min_dimension:document.getElementById('w-min-dim').value.trim(),notes:document.getElementById('w-notes').value.trim()});
-  _wishImgData=null;showToast('Added ✓');renderDetail();
+  _wishImgData=null;showToast('Added ✓');if(wishlistCounts)wishlistCounts[customerId]=(wishlistCounts[customerId]||0)+1;renderTable();renderDetail();
 }
 async function updateWishStatus(id,val){await sb.from('wishlists').update({wish_status:val}).eq('id',id);renderDetail()}
-async function removeWish(id){await sb.from('wishlists').delete().eq('id',id);renderDetail()}
+async function removeWish(id){const {data:w}=await sb.from('wishlists').select('customer_id').eq('id',id).single();await sb.from('wishlists').delete().eq('id',id);if(w?.customer_id&&wishlistCounts[w.customer_id])wishlistCounts[w.customer_id]--;renderTable();renderDetail();}
 
 // ORDERS IN DETAIL
 function renderOrdersDetail(c,orders){
