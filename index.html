@@ -57,13 +57,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .ctable td{padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
 .ctable tr.data-row{cursor:pointer;transition:background .12s}
 .ctable tr.data-row:hover td{background:#f5f0ea}
-.ctable tr.priority-high td{background:var(--blue-light);border-left:3px solid var(--blue)}
-.ctable tr.priority-high:hover td{background:#cce4f7}
-.ctable tr.priority-medium td{background:var(--green-light);border-left:3px solid var(--green)}
-.ctable tr.priority-medium:hover td{background:#c8eedd}
-.ctable tr.priority-low td{background:var(--amber-light);border-left:3px solid var(--amber)}
-.ctable tr.priority-low:hover td{background:#fde8a0}
-.ctable tr.sel-row td{background:var(--teal-light)!important}
+.ctable tr.priority-high td{background:#dbeeff;border-left:4px solid #1565c0}
+.ctable tr.priority-high:hover td{background:#c4dfff}
+.ctable tr.priority-medium td{background:#d6f5e3;border-left:4px solid #1b7a3e}
+.ctable tr.priority-medium:hover td{background:#b8edce}
+.ctable tr.priority-low td{background:#fffbdd;border-left:4px solid #c9820a}
+.ctable tr.priority-low:hover td{background:#fff4a0}
+.ctable tr.sel-row td{background:#e8e8e8!important;border-left:3px solid var(--stone-dark)!important}
 .follow-indicator{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--orange)}
 .follow-dot{width:7px;height:7px;border-radius:50%;background:var(--orange);animation:blink 1.5s infinite;flex-shrink:0}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
@@ -522,6 +522,7 @@ async function renderDetail(){
             <option value="low" ${c.priority==='low'?'selected':''}>🟡 Low</option>
           </select>
           <button class="btn btn-secondary btn-sm" onclick="openEditCustomer('${c.id}')">Edit</button>
+          <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)" onclick="deleteCustomer('${c.id}','${esc(c.name)}')">🗑</button>
           <button class="btn btn-secondary btn-sm" onclick="closeDetail()">×</button>
         </div>
       </div>
@@ -532,6 +533,18 @@ async function renderDetail(){
 function closeDetail(){selectedId=null;document.getElementById('detail-panel').classList.remove('open');renderTable()}
 function setDTab(t){detailTab=t;renderDetail()}
 
+async function deleteCustomer(id,name){
+  if(!confirm('Delete customer "'+name+'"?\n\nThis will also delete all their wishlists and orders. This cannot be undone.')) return;
+  await sb.from('orders').delete().eq('customer_id',id);
+  await sb.from('wishlists').delete().eq('customer_id',id);
+  const {error}=await sb.from('customers').delete().eq('id',id);
+  if(error){showToast('Error: '+error.message);return;}
+  customers=customers.filter(c=>c.id!==id);
+  selectedId=null;
+  document.getElementById('detail-panel').classList.remove('open');
+  renderTable();
+  showToast('Customer deleted');
+}
 async function setPriority(id,priority){
   await sb.from('customers').update({priority,updated_at:new Date().toISOString()}).eq('id',id);
   customers=sortCustomers(customers.map(c=>c.id===id?{...c,priority,updated_at:new Date().toISOString()}:c));
