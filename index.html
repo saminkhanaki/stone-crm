@@ -226,7 +226,21 @@ hr.div{border:none;border-top:1px solid var(--border);margin:12px 0}
       <div class="ctable-toolbar">
         <div class="search-box"><span style="color:var(--text3)">🔍</span><input type="text" placeholder="Search customers..." id="search-inp" oninput="renderTable()"></div>
         <select class="fsel-sm" id="co-filter" onchange="coFilterChanged(this.value)" style="display:none"><option value="">All Companies</option></select>
-        <input class="fsel-sm" id="country-filter" placeholder="🌍 Country..." oninput="renderTable()" style="width:120px">
+        <select class="fsel-sm" id="country-filter" onchange="renderTable()">
+          <option value="">All Countries</option>
+          <option value="China">🇨🇳 China</option>
+          <option value="India">🇮🇳 India</option>
+          <option value="Italy">🇮🇹 Italy</option>
+          <option value="Egypt">🇪🇬 Egypt</option>
+          <option value="Indonesia">🇮🇩 Indonesia</option>
+          <option value="Spain">🇪🇸 Spain</option>
+          <option value="Turkey">🇹🇷 Turkey</option>
+          <option value="Iran">🇮🇷 Iran</option>
+          <option value="UAE">🇦🇪 UAE</option>
+          <option value="Greece">🇬🇷 Greece</option>
+          <option value="Portugal">🇵🇹 Portugal</option>
+          <option value="Brazil">🇧🇷 Brazil</option>
+        </select>
         <select class="fsel-sm" id="cat-filter" onchange="renderTable()">
           <option value="">All Categories</option>
           <option>Marble</option><option>Travertine</option><option>Granite</option><option>Onyx</option>
@@ -454,7 +468,7 @@ function sortTable(col){
 function renderTable(){
   const hasMultipleCompanies=new Set(customers.map(c=>c.company_id)).size>1;
   const q=document.getElementById('search-inp').value.trim().toLowerCase();
-  const countryQ=(document.getElementById('country-filter')?.value||'').trim().toLowerCase();
+  const countryQ=document.getElementById('country-filter')?.value||'';
   const cat=document.getElementById('cat-filter').value;
   const filterPri=document.getElementById('follow-filter').value;
   const followOnly=filterPri==='follow'||filterPri==='high';
@@ -473,7 +487,7 @@ function renderTable(){
   } else sorted=customers;
   let list=sorted.filter(c=>{
     const ms=!q||c.name.toLowerCase().includes(q)||(c.contact_value||'').toLowerCase().includes(q);
-    const mco=!countryQ||(c.country||'').toLowerCase().includes(countryQ);
+    const mco=!countryQ||(c.country||'')===countryQ;
     const mc=!cat||(c.interests?.categories||[]).includes(cat);
     const mf=!filterPri||(filterPri==='follow'?(c.priority==='high'||c.priority==='medium'):c.priority===filterPri);
     const mr=!retFilter||c.is_returning;
@@ -1499,9 +1513,28 @@ function customerFormHtml(c={}){
   const ptChips=PROD_TYPES.map(t=>`<button type="button" class="chip${(c.product_types||[]).includes(t)?' ca':''}" onclick="toggleProdType(this)" data-pt="${t}">${t}</button>`).join('');
   const pr=c.interests?.price_range||{};
   return`
+    <div class="fg"><label class="fl">Company / Customer Name</label><input class="fi" id="fc-name" value="${esc(c.name||'')}"></div>
     <div class="fgrid">
-      <div class="fg full"><label class="fl">Company / Customer Name</label><input class="fi" id="fc-name" value="${esc(c.name||'')}"></div>
-      <div class="fg"><label class="fl">Country</label><input class="fi" id="fc-country" placeholder="e.g. China, Turkey, Italy" value="${esc(c.country||'')}"></div>
+      <div class="fg">
+        <label class="fl">Country <span class="required-mark">*</span></label>
+        <select class="fsel" id="fc-country" onchange="toggleOtherCountry(this.value)">
+          <option value="">— Select Country</option>
+          <option value="China"${c.country==='China'?' selected':''}>🇨🇳 China</option>
+          <option value="India"${c.country==='India'?' selected':''}>🇮🇳 India</option>
+          <option value="Italy"${c.country==='Italy'?' selected':''}>🇮🇹 Italy</option>
+          <option value="Egypt"${c.country==='Egypt'?' selected':''}>🇪🇬 Egypt</option>
+          <option value="Indonesia"${c.country==='Indonesia'?' selected':''}>🇮🇩 Indonesia</option>
+          <option value="Spain"${c.country==='Spain'?' selected':''}>🇪🇸 Spain</option>
+          <option value="Turkey"${c.country==='Turkey'?' selected':''}>🇹🇷 Turkey</option>
+          <option value="Iran"${c.country==='Iran'?' selected':''}>🇮🇷 Iran</option>
+          <option value="UAE"${c.country==='UAE'?' selected':''}>🇦🇪 UAE</option>
+          <option value="Greece"${c.country==='Greece'?' selected':''}>🇬🇷 Greece</option>
+          <option value="Portugal"${c.country==='Portugal'?' selected':''}>🇵🇹 Portugal</option>
+          <option value="Brazil"${c.country==='Brazil'?' selected':''}>🇧🇷 Brazil</option>
+          <option value="Other"${(c.country&&!['China','India','Italy','Egypt','Indonesia','Spain','Turkey','Iran','UAE','Greece','Portugal','Brazil'].includes(c.country))?'selected':''}>🌍 Other</option>
+        </select>
+        <input class="fi" id="fc-country-other" placeholder="Enter country name" style="margin-top:6px;${(c.country&&!['China','India','Italy','Egypt','Indonesia','Spain','Turkey','Iran','UAE','Greece','Portugal','Brazil'].includes(c.country))?'':'display:none'}" value="${(c.country&&!['China','India','Italy','Egypt','Indonesia','Spain','Turkey','Iran','UAE','Greece','Portugal','Brazil'].includes(c.country))?esc(c.country):''}">
+      </div>
       <div class="fg"><label class="fl">City</label><input class="fi" id="fc-city" placeholder="e.g. Shanghai" value="${esc(c.city||'')}"></div>
     </div>
     <div class="fg"><label class="fl">Preferred Communication Channel</label>
@@ -1545,6 +1578,10 @@ function selectChannel(ch){
   const inp=document.getElementById('fc-contact-val');
   if(inp&&init) inp.value=init;
 }
+function toggleOtherCountry(val){
+  const other=document.getElementById('fc-country-other');
+  if(other) other.style.display=val==='Other'?'':'none';
+}
 function toggleProdType(el){el.classList.toggle('ca');const active=[...document.querySelectorAll('#chips-pt .chip.ca')].map(e=>e.dataset.pt);document.getElementById('dim-block').style.display=active.includes('Block')?'':'none';document.getElementById('dim-slab').style.display=active.includes('Slab')?'':'none';document.getElementById('dim-cut').style.display=active.includes('Cut to Size')?'':'none';}
 function openAddCustomer(){openModal('New Customer',customerFormHtml())}
 function openEditCustomer(id){const c=customers.find(x=>x.id===id);openModal('Edit Customer',customerFormHtml(c))}
@@ -1557,7 +1594,11 @@ async function saveCustomerForm(id){
   // Keep existing company_id or use Samin Marble as default
   const existingC=id?customers.find(x=>x.id===id):null;
   const coId=existingC?.company_id||SAMIN_MARBLE_ID;
-  const obj={name,company_id:coId,country:document.getElementById('fc-country')?.value.trim()||'',city:document.getElementById('fc-city')?.value.trim()||'',preferred_channel:ch,contact_value:contactVal,contact:contactVal,
+  const countrySelect=document.getElementById('fc-country')?.value||'';
+  const countryOther=document.getElementById('fc-country-other')?.value.trim()||'';
+  const finalCountry=countrySelect==='Other'?countryOther:countrySelect;
+  if(!finalCountry){showToast('Please select a country');return;}
+  const obj={name,company_id:coId,country:finalCountry,city:document.getElementById('fc-city')?.value.trim()||'',preferred_channel:ch,contact_value:contactVal,contact:contactVal,
     send_price:document.getElementById('fc-price').checked,send_dimensions:document.getElementById('fc-dims').checked,send_slab_photo:document.getElementById('fc-slab').checked,
     product_types:pts,block_min_dim:document.getElementById('fc-block-dim')?.value.trim()||'',slab_min_dim:document.getElementById('fc-slab-dim')?.value.trim()||'',cut_dimensions:document.getElementById('fc-cut-dim')?.value.trim()||'',
     interests:{categories:cats,price_range:{max:document.getElementById('fc-pmax').value,currency:document.getElementById('fc-currency').value,term:document.getElementById('fc-term').value,unit:document.getElementById('fc-unit').value,destination:document.getElementById('fc-dest').value.trim()},notes:document.getElementById('fc-notes').value.trim()}};
