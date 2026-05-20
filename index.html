@@ -203,7 +203,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:12px 0}
 <body>
 <div id="auth-screen">
   <div class="auth-card">
-    <div class="auth-logo"><div class="auth-icon" style="background:transparent;padding:2px"><img src="https://stone-crm-storage.sales-b7d.workers.dev/MARBLE%20(9).png" style="width:100%;height:100%;object-fit:contain;border-radius:10px"></div><div><div class="auth-name">Stone Trading CRM</div><div class="auth-sub">Sign in to your account</div></div></div>
+    <div class="auth-logo"><div class="auth-icon" style="background:transparent;padding:2px"><img src="https://stone-crm-storage.sales-b7d.workers.dev/logo.png" style="width:100%;height:100%;object-fit:contain;border-radius:10px"></div><div><div class="auth-name">Stone Trading CRM</div><div class="auth-sub">Sign in to your account</div></div></div>
     <div class="auth-err" id="auth-err"></div>
     <div class="fg"><label class="fl">Email</label><input class="fi" type="email" id="l-email" placeholder="you@company.com" autocomplete="email"></div>
     <div class="fg"><label class="fl">Password</label><input class="fi" type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
@@ -213,7 +213,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:12px 0}
 
 <div id="app">
   <div class="topbar">
-    <div class="tb-left"><div style="width:36px;height:36px;border-radius:8px;overflow:hidden;flex-shrink:0"><img src="https://stone-crm-storage.sales-b7d.workers.dev/MARBLE%20(9).png" style="width:100%;height:100%;object-fit:contain"></div><div><div class="tb-title">Stone Trading CRM</div><div class="tb-co" id="tb-co">—</div></div></div>
+    <div class="tb-left"><div style="width:36px;height:36px;border-radius:8px;overflow:hidden;flex-shrink:0"><img src="https://stone-crm-storage.sales-b7d.workers.dev/logo.png" style="width:100%;height:100%;object-fit:contain"></div><div><div class="tb-title">Stone Trading CRM</div><div class="tb-co" id="tb-co">—</div></div></div>
     <div class="tb-right"><span class="user-badge" id="user-badge">—</span><button class="btn btn-secondary btn-sm" onclick="doLogout()">Sign Out</button></div>
   </div>
   <div class="tabs-bar" id="tabs-bar"></div>
@@ -618,6 +618,7 @@ function renderWishlist(c,items){
               <button class="icon-btn" onclick="removeWish('${item.id}')">×</button>
             </div>
           </div>
+          ${(()=>{const sc=companies.find(x=>x.id===item.supplier_company_id);return sc?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${sc.country==='TR'?'🇹🇷':'🇮🇷'} ${esc(sc.name)}</div>`:''})()}
           ${prStr?`<div style="font-size:12px;color:var(--amber);font-weight:600;margin-top:2px">${esc(prStr)}</div>`:''}
           ${item.min_dimension?`<div style="font-size:11px;color:var(--text3);margin-top:2px">Min: ${esc(item.min_dimension)}</div>`:''}
           ${item.notes?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${esc(item.notes)}</div>`:''}
@@ -626,8 +627,10 @@ function renderWishlist(c,items){
       </div>
     </div>`;
   }).join(''):'<div style="text-align:center;color:var(--text3);font-size:12px;padding:14px">No items yet</div>';
+  const coOpts=companies.map(co=>`<option value="${co.id}">${co.name} ${co.country==='TR'?'🇹🇷':'🇮🇷'}</option>`).join('');
   return`<div class="wish-add">
     <div style="font-size:12px;font-weight:700;color:#8a5a00;margin-bottom:9px">+ Add Stone They Liked</div>
+    <div class="fg"><label class="fl">Supplier Company</label><select class="fsel" id="w-supplier">${coOpts}</select></div>
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <label style="cursor:pointer;flex-shrink:0">
         <input type="file" accept="image/*" style="display:none" onchange="previewWishImg(this)">
@@ -659,7 +662,8 @@ async function addWishItem(customerId,companyId){
       imageData=r.url;
     }catch(e){showToast('Image upload failed');return;}
   }
-  await sb.from('wishlists').insert({customer_id:customerId,company_id:companyId,stone,wish_status:'liked',image_data:imageData||null,price_amount:document.getElementById('w-price').value||null,price_currency:document.getElementById('w-currency').value,price_term:document.getElementById('w-term').value,price_unit:document.getElementById('w-unit').value,price_destination:document.getElementById('w-dest').value.trim(),min_dimension:document.getElementById('w-min-dim').value.trim(),notes:document.getElementById('w-notes').value.trim()});
+  const supplierCompanyId=document.getElementById('w-supplier')?.value||companyId;
+  await sb.from('wishlists').insert({customer_id:customerId,company_id:companyId,supplier_company_id:supplierCompanyId,stone,wish_status:'liked',image_data:imageData||null,price_amount:document.getElementById('w-price').value||null,price_currency:document.getElementById('w-currency').value,price_term:document.getElementById('w-term').value,price_unit:document.getElementById('w-unit').value,price_destination:document.getElementById('w-dest').value.trim(),min_dimension:document.getElementById('w-min-dim').value.trim(),notes:document.getElementById('w-notes').value.trim()});
   _wishImgData=null;showToast('Added ✓');renderDetail();
 }
 async function updateWishStatus(id,val){await sb.from('wishlists').update({wish_status:val}).eq('id',id);renderDetail()}
@@ -975,8 +979,13 @@ function renderOrdersList(){
     const cur=steps[o.current_step]?.l||'Completed ✓';
     const co=companies.find(x=>x.id===o.customers?.company_id);
     const fin=o.financials||{receivables:[],payables:[]};
-    const totalRec=(fin.receivables||[]).reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
-    const totalPay=(fin.payables||[]).reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
+    const toUSDsb=(amount,currency,rate)=>{
+      if(!amount) return 0;
+      if(currency==='USD'||!rate) return parseFloat(amount)||0;
+      return (parseFloat(amount)||0)/(parseFloat(rate)||1);
+    };
+    const totalRec=(fin.receivables||[]).reduce((s,t)=>s+toUSDsb(t.amount,t.currency,t.usd_rate),0);
+    const totalPay=(fin.payables||[]).reduce((s,t)=>s+toUSDsb(t.amount,t.currency,t.usd_rate),0);
     const bal=totalRec-totalPay;
     const marks=o.stone_marks||[];
     const isSelected=o.id===selectedOrderId;
