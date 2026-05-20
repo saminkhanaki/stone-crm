@@ -231,7 +231,8 @@ hr.div{border:none;border-top:1px solid var(--border);margin:12px 0}
           <option>Marble</option><option>Travertine</option><option>Granite</option><option>Onyx</option>
           <option>Traonyx</option><option>Marbonyx</option><option>Limestone</option><option>Basalt</option><option>Quartzite</option><option>Sandstone</option>
         </select>
-        <select class="fsel-sm" id="follow-filter" onchange="renderTable()"><option value="">All Priorities</option><option value="follow">🔴🟡 High & Medium</option><option value="high">🔵 High Only</option></select>
+        <select class="fsel-sm" id="follow-filter" onchange="renderTable()"><option value="">All Priorities</option><option value="follow">🔵🟢 High & Medium</option><option value="high">🔵 High Only</option></select>
+        <select class="fsel-sm" id="returning-filter" onchange="renderTable()"><option value="">All Customers</option><option value="returning">🔁 Returning</option></select>
         <button class="btn-new" onclick="openAddCustomer()">+ New Customer</button>
       </div>
       <div class="tab-content-layout">
@@ -448,11 +449,13 @@ function renderTable(){
   const cat=document.getElementById('cat-filter').value;
   const filterPri=document.getElementById('follow-filter').value;
   const followOnly=filterPri==='follow'||filterPri==='high';
+  const retFilter=document.getElementById('returning-filter')?.value||'';
   let list=customers.filter(c=>{
     const ms=!q||c.name.toLowerCase().includes(q)||(c.contact_value||'').toLowerCase().includes(q);
     const mc=!cat||(c.interests?.categories||[]).includes(cat);
     const mf=!filterPri||(filterPri==='follow'?(c.priority==='high'||c.priority==='medium'):c.priority===filterPri);
-    return ms&&mc&&mf;
+    const mr=!retFilter||c.is_returning;
+    return ms&&mc&&mf&&mr;
   });
   const el=document.getElementById('ctable-wrap');
   if(!list.length){el.innerHTML='<div class="empty"><div class="eicon">🪨</div><p>No customers found</p></div>';return;}
@@ -462,7 +465,7 @@ function renderTable(){
   <table class="ctable"><thead><tr>
     <th>#</th><th>Customer</th><th>Categories</th><th>Product</th><th>Max Price</th><th>Channel</th>
     ${isAdmin()&&!companyFilter&&hasMultipleCompanies?'<th>Company</th>':''}
-    <th style="text-align:center">⭐</th><th>Updated</th><th></th>
+    <th style="text-align:center">⭐</th><th style="text-align:center">🔁</th><th>Updated</th><th></th>
   </tr></thead><tbody>
   ${list.map((c,i)=>{
     const ch=CH_CONFIG[c.preferred_channel]||CH_CONFIG.whatsapp;
@@ -480,6 +483,7 @@ function renderTable(){
       <td style="font-size:12px">${ch.icon} ${ch.label}</td>
       ${isAdmin()&&!companyFilter&&hasMultipleCompanies?`<td>${co?badge(co.name,co.country==='TR'?'b-tr':'b-ir'):''}</td>`:''}
       <td style="text-align:center">${wishlistCounts[c.id]?`<span style="background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700">${wishlistCounts[c.id]}</span>`:''}</td>
+      <td style="text-align:center">${c.is_returning?`<span style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700">🔁</span>`:''}</td>
       <td style="font-size:11px;color:var(--text3)">${fmtDate(c.updated_at||c.created_at)}</td>
       <td>${c.priority==='high'?badge('High','b-blue'):c.priority==='medium'?badge('Medium','b-green'):c.priority==='low'?badge('Low','b-amber'):''}</td>
     </tr>`;
@@ -521,6 +525,7 @@ async function renderDetail(){
             <option value="medium" ${c.priority==='medium'?'selected':''}>🟢 Medium</option>
             <option value="low" ${c.priority==='low'?'selected':''}>🟡 Low</option>
           </select>
+          <button class="btn btn-sm" style="${c.is_returning?'background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7':'background:var(--surface2);color:var(--text3);border:1px solid var(--border)'}" onclick="toggleReturning('${c.id}',${c.is_returning})" title="Toggle returning customer">🔁</button>
           <button class="btn btn-secondary btn-sm" onclick="openEditCustomer('${c.id}')">Edit</button>
           <button class="btn btn-sm" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)" onclick="deleteCustomer('${c.id}','${esc(c.name)}')">🗑</button>
           <button class="btn btn-secondary btn-sm" onclick="closeDetail()">×</button>
@@ -544,6 +549,11 @@ async function deleteCustomer(id,name){
   document.getElementById('detail-panel').classList.remove('open');
   renderTable();
   showToast('Customer deleted');
+}
+async function toggleReturning(id,current){
+  await sb.from('customers').update({is_returning:!current,updated_at:new Date().toISOString()}).eq('id',id);
+  customers=sortCustomers(customers.map(c=>c.id===id?{...c,is_returning:!current}:c));
+  renderTable();renderDetail();showToast(current?'Marked as new customer':'Marked as returning 🔁');
 }
 async function setPriority(id,priority){
   await sb.from('customers').update({priority,updated_at:new Date().toISOString()}).eq('id',id);
@@ -639,12 +649,15 @@ function renderWishlist(c,items){
   const list=items.length?items.map(item=>{
     const ws=WISH_STATUS[item.wish_status||'liked'];
     const prStr=item.price_amount?`${item.price_amount} ${item.price_currency||'USD'}/${item.price_unit||'ton'} ${item.price_term||'CNF'}${item.price_destination?' — '+item.price_destination:''}`:'';
+    const sc=companies.find(x=>x.id===item.supplier_company_id);
     return`<div class="wish-item">
-      <div style="display:flex;gap:9px">
-        ${item.image_data?`<img src="${esc(item.image_data)}" onclick="previewImg('${esc(item.image_data)}')" style="width:68px;height:68px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">`
-        :'<div style="width:68px;height:68px;border-radius:8px;border:1.5px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;color:var(--text3)">🪨</div>'}
+      <div style="display:flex;gap:10px">
+        <div style="flex-shrink:0">
+          ${item.image_data?`<img src="${esc(item.image_data)}" onclick="previewImg('${esc(item.image_data)}')" style="width:80px;height:80px;object-fit:cover;border-radius:9px;border:1px solid var(--border);cursor:pointer;display:block">`
+          :'<div style="width:80px;height:80px;border-radius:9px;border:1.5px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--text3)">🪨</div>'}
+        </div>
         <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px;margin-bottom:4px">
             <span style="font-size:13px;font-weight:700;line-height:1.3">${esc(item.stone)}</span>
             <div style="display:flex;align-items:center;gap:3px;flex-shrink:0">
               <select class="wish-sel" onchange="updateWishStatus('${item.id}',this.value)">
@@ -655,11 +668,11 @@ function renderWishlist(c,items){
               <button class="icon-btn" onclick="removeWish('${item.id}')">×</button>
             </div>
           </div>
-          ${(()=>{const sc=companies.find(x=>x.id===item.supplier_company_id);return sc?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${sc.country==='TR'?'🇹🇷':'🇮🇷'} ${esc(sc.name)}</div>`:''})()}
-          ${prStr?`<div style="font-size:12px;color:var(--amber);font-weight:600;margin-top:2px">${esc(prStr)}</div>`:''}
-          ${item.min_dimension?`<div style="font-size:11px;color:var(--text3);margin-top:2px">Min: ${esc(item.min_dimension)}</div>`:''}
-          ${item.notes?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${esc(item.notes)}</div>`:''}
-          <div style="margin-top:4px">${badge(ws.label,ws.cls)}</div>
+          ${sc?`<div style="font-size:11px;margin-bottom:3px">${sc.country==='TR'?'🇹🇷':'🇮🇷'} <span style="color:var(--text3)">${esc(sc.name)}</span></div>`:''}
+          ${prStr?`<div style="font-size:12px;color:var(--amber);font-weight:700;margin-bottom:3px">💰 ${esc(prStr)}</div>`:''}
+          ${item.min_dimension?`<div style="font-size:11px;color:var(--text2);margin-bottom:3px">📐 Min: <b>${esc(item.min_dimension)}</b></div>`:''}
+          ${item.notes?`<div style="font-size:12px;color:var(--text2);background:var(--surface2);border-radius:7px;padding:5px 8px;margin-bottom:4px;line-height:1.5">${esc(item.notes)}</div>`:''}
+          <div style="margin-top:2px">${badge(ws.label,ws.cls)}</div>
         </div>
       </div>
     </div>`;
