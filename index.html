@@ -627,7 +627,7 @@ function renderWishlist(c,items){
       </div>
     </div>`;
   }).join(''):'<div style="text-align:center;color:var(--text3);font-size:12px;padding:14px">No items yet</div>';
-  const coOpts=companies.map(co=>`<option value="${co.id}">${co.name} ${co.country==='TR'?'🇹🇷':'🇮🇷'}</option>`).join('');
+  const coOpts=companies.map(co=>`<option value="${co.id}"${co.id===SAMIN_MARBLE_ID?' selected':''}>${co.name} ${co.country==='TR'?'🇹🇷':'🇮🇷'}</option>`).join('');
   return`<div class="wish-add">
     <div style="font-size:12px;font-weight:700;color:#8a5a00;margin-bottom:9px">+ Add Stone They Liked</div>
     <div class="fg"><label class="fl">Supplier Company</label><select class="fsel" id="w-supplier">${coOpts}</select></div>
@@ -702,7 +702,7 @@ function renderOrderCard(o,inDetail=false){
       if(isVid) return`<button class="step-file-item" onclick="previewFileModal('${esc(f.url)}','${esc(f.name)}','video')">${fileIcon(f.name)} ${esc(f.name.length>18?f.name.slice(0,16)+'…':f.name)}</button>`;
       return`<a class="step-file-item" href="${esc(f.url)}" target="_blank" title="${esc(f.name)}">${fileIcon(f.name)} ${esc(f.name.length>18?f.name.slice(0,16)+'…':f.name)}</a>`;
     }).join('');
-    const uploadHtml=(active||done)&&s.files&&s.files.length?`<label class="file-upload-btn"><input type="file" style="display:none" accept="${getAccept(s.files)}" onchange="uploadStepFile('${o.id}','${s.k}',this)">📎 ${s.fileLabel||'Attach file'}</label>`:'';
+    const uploadHtml=(active||done)&&s.files&&s.files.length?`<label class="file-upload-btn"><input type="file" style="display:none" accept="${getAccept(s.files)}" multiple onchange="uploadStepFiles('${o.id}','${s.k}',this)">📎 ${s.fileLabel||'Attach files'}</label>`:'';
     return`<div class="step ${cls}">
       <div class="step-row">
         <div class="step-num ${done?'sn-done':active?'sn-active':'sn-future'}">${done?'✓':i+1}</div>
@@ -933,16 +933,18 @@ async function saveStepNote(orderId,stepKey,val){
   const {data:ord}=await sb.from('orders').select('step_notes').eq('id',orderId).single();
   await sb.from('orders').update({step_notes:{...(ord?.step_notes||{}),[stepKey]:val}}).eq('id',orderId);
 }
-async function uploadStepFile(orderId,stepKey,input){
-  const file=input.files[0];if(!file)return;
-  showToast('Uploading...');
+async function uploadStepFiles(orderId,stepKey,input){
+  const files=Array.from(input.files);if(!files.length)return;
+  showToast(`Uploading ${files.length} file(s)...`);
   try{
-    const r=await uploadToR2(file,`orders/${orderId}`);
     const {data:ord}=await sb.from('orders').select('step_files').eq('id',orderId).single();
     const sf={...(ord?.step_files||{})};
-    sf[stepKey]=[...(sf[stepKey]||[]),{name:file.name,url:r.url,key:r.key}];
+    for(const file of files){
+      const r=await uploadToR2(file,`orders/${orderId}`);
+      sf[stepKey]=[...(sf[stepKey]||[]),{name:file.name,url:r.url,key:r.key}];
+    }
     await sb.from('orders').update({step_files:sf}).eq('id',orderId);
-    showToast('File uploaded ✓');
+    showToast(`${files.length} file(s) uploaded ✓`);
     renderDetail();
   }catch(e){showToast('Upload failed: '+e.message);}
 }
@@ -1071,7 +1073,7 @@ function renderOrderDetail(o){
       if(isVid) return`<span style="position:relative;display:inline-flex;align-items:center">${delBtn}<button class="step-file-item" onclick="previewFileModal('${esc(f.url)}','${esc(f.name)}','video')">${fileIcon(f.name)} ${esc(f.name.length>18?f.name.slice(0,16)+"…":f.name)}</button></span>`;
       return`<span style="position:relative;display:inline-flex;align-items:center;gap:3px"><a class="step-file-item" href="${esc(f.url)}" target="_blank">${fileIcon(f.name)} ${esc(f.name.length>18?f.name.slice(0,16)+"…":f.name)}</a><button onclick="deleteStepFile('${o.id}','${s.k}',${fi})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:12px;padding:0">×</button></span>`;
     }).join('');
-    const uploadHtml=(active||done)&&s.files&&s.files.length?`<label class="file-upload-btn"><input type="file" style="display:none" accept="${getAccept(s.files)}" onchange="uploadStepFileOrd('${o.id}','${s.k}',this)">📎 ${s.fileLabel||'Attach file'}</label>`:'';
+    const uploadHtml=(active||done)&&s.files&&s.files.length?`<label class="file-upload-btn"><input type="file" style="display:none" accept="${getAccept(s.files)}" multiple onchange="uploadStepFilesOrd('${o.id}','${s.k}',this)">📎 ${s.fileLabel||'Attach files'}</label>`:'';
     return`<div class="step ${cls}">
       <div class="step-row">
         <div class="step-num ${done?'sn-done':active?'sn-active':'sn-future'}">${done?'✓':i+1}</div>
@@ -1259,16 +1261,18 @@ async function saveStepNoteOrd(orderId,stepKey,val){
   const {data:ord}=await sb.from('orders').select('step_notes').eq('id',orderId).single();
   await sb.from('orders').update({step_notes:{...(ord?.step_notes||{}),[stepKey]:val}}).eq('id',orderId);
 }
-async function uploadStepFileOrd(orderId,stepKey,input){
-  const file=input.files[0];if(!file)return;
-  showToast('Uploading...');
+async function uploadStepFilesOrd(orderId,stepKey,input){
+  const files=Array.from(input.files);if(!files.length)return;
+  showToast(`Uploading ${files.length} file(s)...`);
   try{
-    const r=await uploadToR2(file,'orders/'+orderId);
     const {data:ord}=await sb.from('orders').select('step_files').eq('id',orderId).single();
     const sf={...(ord?.step_files||{})};
-    sf[stepKey]=[...(sf[stepKey]||[]),{name:file.name,url:r.url}];
+    for(const file of files){
+      const r=await uploadToR2(file,'orders/'+orderId);
+      sf[stepKey]=[...(sf[stepKey]||[]),{name:file.name,url:r.url}];
+    }
     await sb.from('orders').update({step_files:sf}).eq('id',orderId);
-    showToast('File uploaded ✓');await selectOrder(orderId,true);
+    showToast(`${files.length} file(s) uploaded ✓`);await selectOrder(orderId,true);
   }catch(e){showToast('Upload failed: '+e.message);}
 }
 // PACKING LIST
