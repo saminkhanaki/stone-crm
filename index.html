@@ -203,7 +203,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:12px 0}
 <body>
 <div id="auth-screen">
   <div class="auth-card">
-    <div class="auth-logo"><div class="auth-icon">🪨</div><div><div class="auth-name">Stone Trading CRM</div><div class="auth-sub">Sign in to your account</div></div></div>
+    <div class="auth-logo"><div class="auth-icon" style="background:transparent;padding:2px"><img src="https://stone-crm-storage.sales-b7d.workers.dev/MARBLE%20(9).png" style="width:100%;height:100%;object-fit:contain;border-radius:10px"></div><div><div class="auth-name">Stone Trading CRM</div><div class="auth-sub">Sign in to your account</div></div></div>
     <div class="auth-err" id="auth-err"></div>
     <div class="fg"><label class="fl">Email</label><input class="fi" type="email" id="l-email" placeholder="you@company.com" autocomplete="email"></div>
     <div class="fg"><label class="fl">Password</label><input class="fi" type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
@@ -213,7 +213,7 @@ hr.div{border:none;border-top:1px solid var(--border);margin:12px 0}
 
 <div id="app">
   <div class="topbar">
-    <div class="tb-left"><div class="tb-icon">🪨</div><div><div class="tb-title">Stone Trading CRM</div><div class="tb-co" id="tb-co">—</div></div></div>
+    <div class="tb-left"><div style="width:36px;height:36px;border-radius:8px;overflow:hidden;flex-shrink:0"><img src="https://stone-crm-storage.sales-b7d.workers.dev/MARBLE%20(9).png" style="width:100%;height:100%;object-fit:contain"></div><div><div class="tb-title">Stone Trading CRM</div><div class="tb-co" id="tb-co">—</div></div></div>
     <div class="tb-right"><span class="user-badge" id="user-badge">—</span><button class="btn btn-secondary btn-sm" onclick="doLogout()">Sign Out</button></div>
   </div>
   <div class="tabs-bar" id="tabs-bar"></div>
@@ -271,12 +271,19 @@ let selectedId=null,detailTab='profile',companyFilter='';
 
 const CATS=['Marble','Travertine','Granite','Onyx','Traonyx','Marbonyx','Limestone','Basalt','Quartzite','Sandstone'];
 const PROD_TYPES=['Block','Slab','Cut to Size'];
+const CH_ICONS={
+  whatsapp:`<svg width="14" height="14" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>`,
+  telegram:`<svg width="14" height="14" viewBox="0 0 24 24" fill="#2AABEE"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>`,
+  email:`<svg width="14" height="14" viewBox="0 0 24 24" fill="#EA4335"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-.904.732-1.636 1.636-1.636h.96l9.404 7.053 9.404-7.053h.96A1.636 1.636 0 0 1 24 5.457z"/></svg>`,
+  wechat:`<svg width="14" height="14" viewBox="0 0 24 24" fill="#07C160"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c-.2-.612-.31-1.257-.31-1.926 0-3.782 3.667-6.853 8.18-6.853.143 0 .284.006.425.014C16.585 4.326 12.992 2.188 8.69 2.188zm-2.175 3.51c.574 0 1.04.463 1.04 1.036a1.04 1.04 0 0 1-1.04 1.04 1.04 1.04 0 0 1-1.04-1.04c0-.573.466-1.037 1.04-1.037zm4.35 0c.573 0 1.04.463 1.04 1.036a1.04 1.04 0 0 1-1.04 1.04 1.04 1.04 0 0 1-1.04-1.04c0-.573.466-1.037 1.04-1.037zm4.943 3.726c-3.905 0-7.073 2.65-7.073 5.917 0 3.267 3.168 5.917 7.073 5.917.847 0 1.658-.126 2.413-.354a.706.706 0 0 1 .59.082l1.573.92a.27.27 0 0 0 .138.046c.132 0 .24-.107.24-.244 0-.06-.024-.116-.04-.176l-.323-1.224a.49.49 0 0 1 .176-.549C22.1 19.514 23 18.108 23 16.54c0-3.267-3.168-5.917-7.19-5.917zm-2.418 2.7c.474 0 .858.383.858.855a.858.858 0 0 1-.858.857.858.858 0 0 1-.858-.857c0-.472.384-.856.858-.856zm4.836 0c.474 0 .858.383.858.855a.858.858 0 0 1-.858.857.858.858 0 0 1-.858-.857c0-.472.384-.856.858-.856z"/></svg>`,
+  phone:`<svg width="14" height="14" viewBox="0 0 24 24" fill="#6b6560"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>`,
+};
 const CH_CONFIG={
-  whatsapp:{label:'WhatsApp',icon:'💬',field:'Phone / WhatsApp',placeholder:'+1 234 567 8900'},
-  telegram:{label:'Telegram',icon:'✈️',field:'Telegram Username',placeholder:'@username'},
-  email:{label:'Email',icon:'✉️',field:'Email Address',placeholder:'contact@company.com'},
-  wechat:{label:'WeChat',icon:'💚',field:'WeChat ID',placeholder:'WeChat ID'},
-  phone:{label:'Phone',icon:'📞',field:'Phone Number',placeholder:'+1 234 567 8900'},
+  whatsapp:{label:'WhatsApp',icon:CH_ICONS.whatsapp,field:'Phone / WhatsApp',placeholder:'+1 234 567 8900'},
+  telegram:{label:'Telegram',icon:CH_ICONS.telegram,field:'Telegram Username',placeholder:'@username'},
+  email:{label:'Email',icon:CH_ICONS.email,field:'Email Address',placeholder:'contact@company.com'},
+  wechat:{label:'WeChat',icon:CH_ICONS.wechat,field:'WeChat ID',placeholder:'WeChat ID'},
+  phone:{label:'Phone',icon:CH_ICONS.phone,field:'Phone Number',placeholder:'+1 234 567 8900'},
 };
 const WISH_STATUS={liked:{label:'Liked ❤️',cls:'b-red'},quoted:{label:'Quoted 💰',cls:'b-amber'},ordered:{label:'Ordered ✓',cls:'b-green'}};
 
@@ -421,6 +428,7 @@ function sortCustomers(list){
   return[...follow,...rest];
 }
 function renderTable(){
+  const hasMultipleCompanies=new Set(customers.map(c=>c.company_id)).size>1;
   const q=document.getElementById('search-inp').value.trim().toLowerCase();
   const cat=document.getElementById('cat-filter').value;
   const followOnly=document.getElementById('follow-filter').value==='follow';
@@ -435,7 +443,7 @@ function renderTable(){
   el.innerHTML=`<div style="padding:6px 14px;font-size:11px;color:var(--text3);border-bottom:1px solid var(--border);background:var(--surface2)">${list.length} customers${fc?` · <span style="color:var(--orange);font-weight:600">🔔 ${fc} follow-up</span>`:''}</div>
   <table class="ctable"><thead><tr>
     <th>#</th><th>Customer</th><th>Categories</th><th>Product</th><th>Max Price</th><th>Channel</th>
-    ${isAdmin()&&!companyFilter?'<th>Company</th>':''}
+    ${isAdmin()&&!companyFilter&&hasMultipleCompanies?'<th>Company</th>':''}
     <th>Updated</th><th></th>
   </tr></thead><tbody>
   ${list.map((c,i)=>{
@@ -452,7 +460,7 @@ function renderTable(){
       <td><div style="display:flex;flex-wrap:wrap;gap:3px">${pts}</div></td>
       <td style="font-size:12px;white-space:nowrap;color:var(--text2)">${esc(prStr)}</td>
       <td style="font-size:12px">${ch.icon} ${ch.label}</td>
-      ${isAdmin()&&!companyFilter?`<td>${co?badge(co.name,co.country==='TR'?'b-tr':'b-ir'):''}</td>`:''}
+      ${isAdmin()&&!companyFilter&&hasMultipleCompanies?`<td>${co?badge(co.name,co.country==='TR'?'b-tr':'b-ir'):''}</td>`:''}
       <td style="font-size:11px;color:var(--text3)">${fmtDate(c.updated_at||c.created_at)}</td>
       <td>${c.follow_up?`<span class="follow-indicator"><span class="follow-dot"></span>Follow</span>`:''}</td>
     </tr>`;
@@ -723,6 +731,7 @@ function renderOrderCard(o,inDetail=false){
   const toUSD=(amount,currency,rate)=>{
     if(!amount) return 0;
     if(currency==='USD'||!rate) return parseFloat(amount)||0;
+    // rate = 1 USD = X currency, so USD = amount / rate
     return (parseFloat(amount)||0)/(parseFloat(rate)||1);
   };
   const totalRec=rec.reduce((s,t)=>s+toUSD(t.amount,t.currency,t.usd_rate),0);
@@ -1027,6 +1036,7 @@ function renderOrderDetail(o){
   const toUSD=(amount,currency,rate)=>{
     if(!amount) return 0;
     if(currency==='USD'||!rate) return parseFloat(amount)||0;
+    // rate = 1 USD = X currency, so USD = amount / rate
     return (parseFloat(amount)||0)/(parseFloat(rate)||1);
   };
   const totalRec=rec.reduce((s,t)=>s+toUSD(t.amount,t.currency,t.usd_rate),0);
@@ -1113,7 +1123,7 @@ function renderOrderDetail(o){
   // FINANCIALS HTML
   const txRow=(t,i,type)=>{
     const filesHtml2=(t.files||[]).map(f=>`<a class="step-file-item" href="${esc(f.url)}" target="_blank">${fileIcon(f.name)} ${esc(f.name.length>16?f.name.slice(0,14)+"…":f.name)}</a>`).join('');
-    const usdVal=t.currency!=='USD'&&t.usd_rate?`<span style="font-size:10px;color:var(--text3);margin-left:4px">= ${(toUSD(t.amount,t.currency,t.usd_rate)).toFixed(0)} USD @ ${t.usd_rate}</span>`:'';
+    const usdVal=t.currency!=='USD'&&t.usd_rate?`<span style="font-size:10px;color:var(--text3);margin-left:4px">≈ ${(toUSD(t.amount,t.currency,t.usd_rate)).toFixed(0)} USD (1 USD=${t.usd_rate} ${t.currency})</span>`:'';
     return`<div style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:6px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
         <div style="flex:1">
@@ -1320,9 +1330,9 @@ function openAddTxOrd(ordId,type){
       </div>
     </div>
     <div class="fg" id="tx-rate-wrap" style="display:none">
-      <label class="fl">Exchange Rate to USD <span class="required-mark">*</span></label>
-      <input type="number" class="fi" id="tx-rate" placeholder="e.g. 0.031 for TRY, 1.08 for EUR" step="any">
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">1 selected currency = ? USD &nbsp;(e.g. 1 EUR = 1.08 USD → enter 1.08)</div>
+      <label class="fl">Exchange Rate <span class="required-mark">*</span></label>
+      <input type="number" class="fi" id="tx-rate" placeholder="e.g. 32 for TRY, 7.2 for CNY" step="any">
+      <div style="font-size:11px;color:var(--text3);margin-top:3px" id="tx-rate-hint">1 USD = ? (selected currency) &nbsp;→ e.g. 1 USD = 32 TRY → enter 32</div>
     </div>
     <div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="tx-date"></div>
     <div class="fg"><label class="fl">Notes</label><input class="fi" id="tx-notes" placeholder="Optional"></div>
@@ -1334,6 +1344,8 @@ function openAddTxOrd(ordId,type){
 function toggleTxRate(currency){
   const wrap=document.getElementById('tx-rate-wrap');
   if(wrap) wrap.style.display=currency==='USD'?'none':'';
+  const hint=document.getElementById('tx-rate-hint');
+  if(hint) hint.textContent=`1 USD = ? ${currency} → enter the rate`;
 }
 async function saveTxOrd(ordId,type){
   const desc=document.getElementById('tx-desc').value.trim();
